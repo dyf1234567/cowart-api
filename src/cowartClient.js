@@ -3,6 +3,7 @@ const SELECTION_ENDPOINT = '/api/selection'
 const VIEW_STATE_ENDPOINT = '/api/view-state'
 const MODEL_PREFERENCES_ENDPOINT = '/api/model-preferences'
 const PROVIDER_CONFIG_ENDPOINT = '/api/provider-config'
+const PROFILES_ENDPOINT = '/api/profiles'
 
 const TOOL_GET_CANVAS_STATE = 'get_cowart_canvas_state'
 const TOOL_SAVE_CANVAS_STATE = 'save_cowart_canvas_state'
@@ -17,6 +18,8 @@ const TOOL_GET_MODEL_PREFERENCES = 'get_cowart_model_preferences'
 const TOOL_SAVE_MODEL_PREFERENCES = 'save_cowart_model_preferences'
 const TOOL_GET_PROVIDER_CONFIG = 'get_cowart_provider_config'
 const TOOL_SAVE_PROVIDER_CONFIG = 'save_cowart_provider_config'
+const TOOL_SAVE_PROFILE = 'save_cowart_provider_profile'
+const TOOL_DELETE_PROFILE = 'delete_cowart_provider_profile'
 const WIDGET_PAYLOAD_TIMEOUT_MS = 5000
 
 globalThis.__COWART_WIDGET_FETCH_GUARD__ = true
@@ -273,6 +276,40 @@ export async function loadCowartProviderConfig(signal) {
 
   const payload = await fetchJson(PROVIDER_CONFIG_ENDPOINT, { signal })
   return payload.config ?? null
+}
+
+export async function loadCowartProfiles(signal) {
+  if (hasCowartWidgetBridge()) {
+    const result = await callCowartServerTool(TOOL_GET_PROVIDER_CONFIG, {}, { signal })
+    return result.profiles ?? []
+  }
+
+  const payload = await fetchJson(PROFILES_ENDPOINT, { signal })
+  return payload.profiles ?? []
+}
+
+export async function saveCowartProfile(profile) {
+  if (hasCowartWidgetBridge()) {
+    return callCowartServerTool(TOOL_SAVE_PROFILE, { profile })
+  }
+
+  return fetchJson(PROFILES_ENDPOINT, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(profile)
+  })
+}
+
+export async function deleteCowartProfile(profileId) {
+  if (hasCowartWidgetBridge()) {
+    return callCowartServerTool(TOOL_DELETE_PROFILE, { profileId })
+  }
+
+  return fetchJson(PROFILES_ENDPOINT, {
+    method: 'DELETE',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ profileId })
+  })
 }
 
 export async function saveCowartProviderConfig(configPatch) {

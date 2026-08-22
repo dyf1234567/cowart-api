@@ -124,22 +124,24 @@ Codex reads the notes and arrows in the screenshot, generates a clean revised im
 
 ![Generate a revised image from a Cowart annotation screenshot](assets/annotation-edit.png)
 
-### Choose An Image Provider: Alibaba Qwen / Custom API / Local ComfyUI
+### Choose An Image Provider: Profiles (Alibaba Qwen / Custom API / Local ComfyUI)
 
-Cowart still defaults to the built-in OpenAI image generation in Codex. Open the top-left main menu and choose `模型选择` to switch to:
+Cowart still defaults to the built-in OpenAI image generation in Codex. Open the top-left main menu and choose `模型选择`; by default it only lists `Codex 默认`. Click `添加画像…` to create any number of named provider profiles, each with any one type:
 
-- **Alibaba Qwen**: uses Alibaba DashScope / Qwen / Wan image models. Click `配置` to fill in `DASHSCOPE_API_KEY`, `DASHSCOPE_BASE_URL`, and the model name.
-- **Custom API**: any OpenAI-compatible image endpoint. Click `配置` to fill in the API key, base URL, and model name; text-to-image uses `/v1/images/generations`, and reference-image edits use `/v1/images/edits`.
-- **Local ComfyUI**: click `配置` to fill in the local server URL (default `http://127.0.0.1:8188`). Paste an API-format workflow JSON with the prompt injection node path (for example `6.inputs.text`), or only fill in a checkpoint name and let the built-in standard workflow run; with a reference image it automatically switches to image-to-image (LoadImage plus adjustable denoise).
+- **Alibaba Qwen**: uses Alibaba DashScope / Qwen / Wan image models. Fill in `DASHSCOPE_API_KEY`, `DASHSCOPE_BASE_URL`, and the model name.
+- **Custom API**: any OpenAI-compatible image endpoint. Fill in the API key, base URL, and model name; text-to-image uses `/v1/images/generations`, and reference-image edits use `/v1/images/edits`.
+- **Local ComfyUI**: fill in the local server URL (default `http://127.0.0.1:8188`). Paste an API-format workflow JSON with the prompt injection node path (for example `6.inputs.text`), or only fill in a checkpoint name and let the built-in standard workflow run; with a reference image it automatically switches to image-to-image (LoadImage plus adjustable denoise).
 
-The provider choice is saved to `canvas/cowart-model-preferences.json` in the current project; credentials are stored in the machine-local Cowart config directory (`%APPDATA%\Cowart\provider-config.json` on Windows) and never inside the project's `canvas/`. Non-default providers are only used when the canvas preference selects them, the user explicitly asks for one, or the matching environment variable is set, so the default OpenAI flow stays untouched.
+You can create multiple profiles of each type, for example several custom APIs or several ComfyUI instances. Saved profiles appear in the `模型选择` list; click `配置` to edit or delete one. Selecting a profile routes the current project's image generation through it.
 
-You can also generate a local image directly with the scripts:
+The provider choice is saved to `canvas/cowart-model-preferences.json` in the current project (including `imageProfileId`); credentials are stored in the machine-local Cowart config directory (`%APPDATA%\Cowart\provider-config.json` on Windows, with profiles kept in its `profiles` array) and never inside the project's `canvas/`. Non-default providers are only used when the canvas preference selects a profile, the user explicitly asks for one, or the matching environment variable is set, so the default OpenAI flow stays untouched.
+
+You can also generate a local image directly with the scripts. Use `--profile` to pick a saved profile by name or id; without `--profile` the script falls back to that provider's default single config:
 
 ```bash
 node scripts/generate-dashscope-image.mjs --prompt "A clean product poster for a 3:4 slot" --width 512 --height 683
-node scripts/generate-custom-api-image.mjs --prompt "..." --reference ./base.png
-node scripts/generate-comfyui-image.mjs --prompt "..." --width 1024 --height 1024
+node scripts/generate-custom-api-image.mjs --prompt "..." --reference ./base.png --profile "My Custom API"
+node scripts/generate-comfyui-image.mjs --prompt "..." --width 1024 --height 1024 --profile "Local ComfyUI"
 ```
 
 Each script prints JSON containing `outputPath`; pass that local image path into the Cowart insertion flow. Adding `--reference` switches the script into image-to-image / reference editing mode.

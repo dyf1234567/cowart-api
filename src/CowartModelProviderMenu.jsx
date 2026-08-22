@@ -5,116 +5,162 @@ import {
   TldrawUiMenuGroup,
   TldrawUiMenuSubmenu
 } from 'tldraw'
-import { loadCowartModelPreferences, saveCowartModelPreferences } from './cowartClient.js'
-import { CowartProviderConfigDialog } from './CowartProviderConfigDialog.jsx'
-
-export const IMAGE_PROVIDER_OPTIONS = [
-  { id: 'openai', label: 'Codex 默认', model: 'openai' },
-  { id: 'dashscope', label: '阿里千问', model: 'wan2.7-image-pro' },
-  { id: 'custom', label: '自定义 API', model: null },
-  { id: 'comfyui', label: '本地 ComfyUI', model: null }
-]
+import {
+  loadCowartModelPreferences,
+  loadCowartProfiles,
+  saveCowartModelPreferences
+} from './cowartClient.js'
+import { CowartProviderConfigDialog, profileTypeLabel } from './CowartProviderConfigDialog.jsx'
 
 function useCowartImageProvider() {
-  const [provider, setProvider] = useState('openai')
+  const [preferences, setPreferences] = useState(null)
+  const [profiles, setProfiles] = useState([])
   const [isSaving, setIsSaving] = useState(false)
 
-  useEffect(() => {
-    let isCancelled = false
-
-    async function loadPreferences() {
-      try {
-        const preferences = await loadCowartModelPreferences()
-        const nextProvider = preferences?.imageProvider
-        if (!isCancelled && IMAGE_PROVIDER_OPTIONS.some((option) => option.id === nextProvider)) {
-          setProvider(nextProvider)
-        }
-      } catch {
-        // Keep OpenAI as the UI default when preferences are not available.
-      }
-    }
-
-    loadPreferences()
-
-    return () => {
-      isCancelled = true
+  const reload = useCallback(async () => {
+    try {
+      const [loadedPreferences, loadedProfiles] = await Promise.all([
+        loadCowartModelPreferences(),
+        loadCowartProfiles()
+      ])
+      setPreferences(loadedPreferences)
+      setProfiles(Array.isArray(loadedProfiles) ? loadedProfiles : [])
+    } catch {
+      // Keep defaults when preferences or profiles are not available.
     }
   }, [])
 
-  const saveProvider = useCallback(async (nextProvider) => {
-    const option = IMAGE_PROVIDER_OPTIONS.find((item) => item.id === nextProvider) ?? IMAGE_PROVIDER_OPTIONS[0]
-    setProvider(option.id)
-    setIsSaving(true)
+  useEffect(() => {
+    reload()
+  }, [reload])
 
+  const selectedProfileId = preferences?.imageProvider === 'openai' ? null : preferences?.imageProfileId ?? null
+
+  const selectDefault = useCallback(async () => {
+    setIsSaving(true)
     try {
       await saveCowartModelPreferences({
         version: 1,
-        imageProvider: option.id,
-        imageModel: option.model,
+        imageProvider: 'openai',
+        imageModel: 'openai',
+        imageProfileId: null,
         updatedAt: new Date().toISOString()
       })
-    } catch {
-      setProvider('openai')
+      setPreferences((current) => ({
+        ...(current ?? {}),
+        imageProvider: 'openai',
+        imageModel: 'openai',
+        imageProfileId: null
+      }))
     } finally {
       setIsSaving(false)
     }
   }, [])
 
-  return { provider, isSaving, saveProvider }
+  const selectProfile = useCallback(
+    async (profile) => {
+      setIsSaving(true)
+      try {
+        await saveCowartModelPreferences({
+          version: 1,
+          imageProvider: profile.provider,
+          imageModel: profile.settings?.model || null,
+          imageProfileId: profile.id,
+          updatedAt: new Date().toISOString()
+        })
+        setPreferences((current) => ({
+          ...(current ?? {}),
+          imageProvider: profile.provider,
+          imageModel: profile.settings?.model || null,
+          imageProfileId: profile.id
+        }))
+      } finally {
+        setIsSaving(false)
+      }
+    },
+    []
+  )
+
+  return { profiles, selectedProfileId, isSaving, selectDefault, selectProfile, reload }
 }
 
 export function CowartMainMenu(props) {
-  const [configProvider, setConfigProvider] = useState(null)
+  const [dialog, setDialog] = useState(null)
+  const [menuKey, setMenuKey] = useState(0)
 
   return (
     <>
       <DefaultMainMenu {...props}>
         <DefaultMainMenuContent />
         <TldrawUiMenuGroup id="cowart-model-provider">
-          <CowartImageProviderMenu onConfigure={(providerId) => setConfigProvider(providerId)} />
+          <CowartImageProviderMenu key={menuKey} onOpenDialog={(next) => setDialog(next)} />
         </TldrawUiMenuGroup>
       </DefaultMainMenu>
-      {configProvider && (
+      {dialog && (
         <CowartProviderConfigDialog
-          onClose={() => setConfigProvider(null)}
-          provider={configProvider}
+          defaultProvider={dialog.provider}
+          onClose={() => setDialog(null)}
+          onSaved={() => setMenuKey((current) => current + 1)}
+          profile={dialog.profile ?? null}
         />
       )}
     </>
   )
 }
 
-function CowartImageProviderMenu({ onConfigure }) {
-  const { provider, isSaving, saveProvider } = useCowartImageProvider()
+function CowartImageProviderMenu({ onOpenDialog }) {
+  const { profiles, selectedProfileId, isSaving, selectDefault, selectProfile, reload } =
+    useCowartImageProvider()
 
   return (
     <TldrawUiMenuSubmenu id="cowart-model-provider" label="模型选择">
       <TldrawUiMenuGroup id="cowart-model-provider-options">
-        {IMAGE_PROVIDER_OPTIONS.map((option) => (
+        <button
+          className="tlui-button tlui-button__menu tlui-button__checkbox cowart-provider-menu-item"
+          disabled={isSaving}
+          onClick={selectDefault}
+          type="button"
+        >
+          <span className="cowart-provider-menu-check">{selectedProfileId === null ? '✓' : ''}</span>
+          <span className="tlui-button__label cowart-provider-menu-label">Codex 默认</span>
+        </button>
+
+        {profiles.map((profile) => (
           <button
             className="tlui-button tlui-button__menu tlui-button__checkbox cowart-provider-menu-item"
             disabled={isSaving}
-            key={option.id}
-            onClick={() => saveProvider(option.id)}
+            key={profile.id}
+            onClick={() => selectProfile(profile)}
             type="button"
           >
-            <span className="cowart-provider-menu-check">{provider === option.id ? '✓' : ''}</span>
-            <span className="tlui-button__label cowart-provider-menu-label">{option.label}</span>
-            {option.id !== 'openai' && (
-              <span
-                className="cowart-provider-menu-config"
-                onClick={(event) => {
-                  event.stopPropagation()
-                  onConfigure(option.id)
-                }}
-                role="button"
-                tabIndex={0}
-              >
-                配置
-              </span>
-            )}
+            <span className="cowart-provider-menu-check">{selectedProfileId === profile.id ? '✓' : ''}</span>
+            <span className="tlui-button__label cowart-provider-menu-label">
+              {profile.name}
+              <span className="cowart-provider-menu-type">{profileTypeLabel(profile.provider)}</span>
+            </span>
+            <span
+              className="cowart-provider-menu-config"
+              onClick={(event) => {
+                event.stopPropagation()
+                onOpenDialog({ profile })
+              }}
+              role="button"
+              tabIndex={0}
+            >
+              配置
+            </span>
           </button>
         ))}
+      </TldrawUiMenuGroup>
+
+      <TldrawUiMenuGroup id="cowart-model-provider-add">
+        <button
+          className="tlui-button tlui-button__menu cowart-provider-menu-item"
+          onClick={() => onOpenDialog({ profile: null, provider: 'custom' })}
+          type="button"
+        >
+          <span className="tlui-button__label cowart-provider-menu-label">添加画像…</span>
+        </button>
       </TldrawUiMenuGroup>
     </TldrawUiMenuSubmenu>
   )

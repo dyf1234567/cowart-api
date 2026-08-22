@@ -48,7 +48,7 @@ The user is responsible for providing the relevant screenshot(s). Do not auto-ca
 
 5. Generate a new bitmap.
 
-   First read the Cowart image provider preference with the MCP `get_cowart_model_preferences` tool (or `canvas/cowart-model-preferences.json`). The built-in image generation flow is the default. When the preference (or an explicit user request, or `COWART_IMAGE_PROVIDER`) selects `dashscope`, `custom`, or `comfyui`, run the matching provider script from the Cowart plugin directory with the cleaner source image passed as a reference so the edit stays image-to-image:
+   First read the Cowart image provider preference with the MCP `get_cowart_model_preferences` tool (or `canvas/cowart-model-preferences.json`). The built-in image generation flow is the default. When the preference (or an explicit user request, or `COWART_IMAGE_PROVIDER`) selects `dashscope`, `custom`, or `comfyui`, run the matching provider script from the Cowart plugin directory with the cleaner source image passed as a reference so the edit stays image-to-image. If the preference contains a non-null `imageProfileId`, append `--profile <imageProfileId>` so the script uses that exact saved profile:
 
    ```bash
    node scripts/generate-dashscope-image.mjs --prompt "<edit instructions>" --reference <clean-source-image-path>

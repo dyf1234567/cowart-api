@@ -12,6 +12,9 @@ Calls an OpenAI-compatible image API:
   - Without --reference: POST {baseUrl}/images/generations
   - With --reference:    POST {baseUrl}/images/edits (multipart)
 
+Options:
+  --profile <name|id>     Use a saved Cowart provider profile (custom type) instead of the default section.
+
 Environment:
   COWART_CUSTOM_API_KEY     Required (or configure it from the Cowart canvas UI).
   COWART_CUSTOM_BASE_URL    e.g. https://api.example.com/v1
@@ -54,7 +57,17 @@ async function readJsonIfExists(filePath) {
   }
 }
 
-async function readCustomConfig() {
+async function readCustomConfig(profileRef = null) {
+  if (nonEmptyString(profileRef)) {
+    const { findCowartProfile } = await import("../mcp/lib/canvas-storage.mjs");
+    const profile = await findCowartProfile(profileRef);
+    if (!profile) throw new Error(`No Cowart provider profile named "${profileRef}".`);
+    if (profile.provider !== "custom") {
+      throw new Error(`Profile "${profile.name}" is a ${profile.provider} profile, expected a custom API profile.`);
+    }
+    return profile.settings;
+  }
+
   const explicitConfig = nonEmptyString(process.env.COWART_CUSTOM_CONFIG);
   if (explicitConfig) {
     const payload = await readJsonIfExists(explicitConfig);
@@ -187,7 +200,7 @@ async function main() {
     return;
   }
 
-  const config = await readCustomConfig();
+  const config = await readCustomConfig(args.profile);
   const apiKey =
     nonEmptyString(process.env.COWART_CUSTOM_API_KEY) ||
     nonEmptyString(process.env.CUSTOM_API_KEY) ||

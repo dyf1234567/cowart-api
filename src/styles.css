@@ -1349,6 +1349,15 @@ body {
   background: #d1d5db;
 }
 
+.cowart-config-actions .cowart-config-delete {
+  color: #ffffff;
+  background: var(--tl-color-red, #ef4444);
+}
+
+.cowart-config-actions .cowart-config-delete:hover {
+  filter: brightness(0.92);
+}
+
 .cowart-config-actions button:disabled {
   cursor: default;
   opacity: 0.55;
@@ -1375,6 +1384,12 @@ body {
   min-width: 0;
   line-height: 1;
   text-align: left;
+}
+
+.cowart-provider-menu-type {
+  margin-left: 6px;
+  font-size: 11px;
+  opacity: 0.6;
 }
 
 .cowart-provider-menu-config {

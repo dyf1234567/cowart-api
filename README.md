@@ -124,22 +124,24 @@ Codex 会读取截图里的标注和箭头，生成去掉标注痕迹的新图�
 
 ![演示和切换 Cowart AI Slides](assets/view-slides.png)
 
-### 选择图片模型：阿里千问 / 自定义 API / 本地 ComfyUI
+### 选择图片模型：多画像（阿里千问 / 自定义 API / 本地 ComfyUI）
 
-Cowart 默认仍使用 Codex 内置的 OpenAI 图片生成能力。打开左上角主菜单，选择 `模型选择`，可以切换到：
+Cowart 默认仍使用 Codex 内置的 OpenAI 图片生成能力。打开左上角主菜单，选择 `模型选择`，默认只列出 `Codex 默认`。点击 `添加画像…`，可以创建任意多个具名提供方画像，每个画像任选一种类型：
 
-- **阿里千问**：走阿里 DashScope / 千问 / 万相图片模型，点击 `配置` 填写 `DASHSCOPE_API_KEY`、`DASHSCOPE_BASE_URL` 和模型名。
-- **自定义 API**：任何 OpenAI 兼容的图片接口，点击 `配置` 填写 API Key、Base URL 和模型名；文生图走 `/v1/images/generations`，带参考图时走 `/v1/images/edits`。
-- **本地 ComfyUI**：点击 `配置` 填写本地服务地址（默认 `http://127.0.0.1:8188`）。可以粘贴 API 格式的 Workflow JSON 并指定提示词注入节点路径（如 `6.inputs.text`），也可以只填 Checkpoint 名，由内置标准工作流生成；带参考图时自动走图生图（LoadImage + 可调重绘幅度）。
+- **阿里千问**：走阿里 DashScope / 千问 / 万相图片模型，填写 `DASHSCOPE_API_KEY`、`DASHSCOPE_BASE_URL` 和模型名。
+- **自定义 API**：任何 OpenAI 兼容的图片接口，填写 API Key、Base URL 和模型名；文生图走 `/v1/images/generations`，带参考图时走 `/v1/images/edits`。
+- **本地 ComfyUI**：填写本地服务地址（默认 `http://127.0.0.1:8188`）。可以粘贴 API 格式的 Workflow JSON 并指定提示词注入节点路径（如 `6.inputs.text`），也可以只填 Checkpoint 名，由内置标准工作流生成；带参考图时自动走图生图（LoadImage + 可调重绘幅度）。
 
-模型选择会保存到当前项目的 `canvas/cowart-model-preferences.json`；API Key 等敏感配置保存在本机用户目录的 Cowart 配置文件里（Windows 为 `%APPDATA%\Cowart\provider-config.json`），不会写入项目 `canvas/`。只有当用户在画布中选择了对应提供方、显式要求使用它，或设置了相应环境变量时，才会走非默认提供方，不影响原来的 OpenAI 生成流程。
+每种类型都可以建多个画像，例如同时保存多个自定义 API 或多个 ComfyUI 实例；已保存的画像会出现在 `模型选择` 列表里，点 `配置` 可编辑或删除。选中某个画像后，当前项目的图片生成就走该画像。
 
-也可以不经过画布，直接用脚本手动生成一张本地图片：
+模型选择会保存到当前项目的 `canvas/cowart-model-preferences.json`（含 `imageProfileId`）；API Key 等敏感配置保存在本机用户目录的 Cowart 配置文件里（Windows 为 `%APPDATA%\Cowart\provider-config.json`，画像存于其中的 `profiles` 数组），不会写入项目 `canvas/`。只有当用户在画布中选择了对应画像、显式要求使用它，或设置了相应环境变量时，才会走非默认提供方，不影响原来的 OpenAI 生成流程。
+
+也可以不经过画布，直接用脚本手动生成一张本地图片。用 `--profile` 指定某个已保存的画像名或 id；不带 `--profile` 时回退到对应提供方的默认单份配置：
 
 ```bash
 node scripts/generate-dashscope-image.mjs --prompt "一张适合 3:4 画布的产品海报" --width 512 --height 683
-node scripts/generate-custom-api-image.mjs --prompt "..." --reference ./base.png
-node scripts/generate-comfyui-image.mjs --prompt "..." --width 1024 --height 1024
+node scripts/generate-custom-api-image.mjs --prompt "..." --reference ./base.png --profile "我的自定义 API"
+node scripts/generate-comfyui-image.mjs --prompt "..." --width 1024 --height 1024 --profile "本地 ComfyUI"
 ```
 
 脚本会输出包含 `outputPath` 的 JSON，把这个本地图片路径交给 Cowart 插入流程即可；加 `--reference` 参数即进入图生图 / 参考图编辑模式。

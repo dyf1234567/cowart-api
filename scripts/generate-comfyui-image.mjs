@@ -25,7 +25,10 @@ Environment:
   COMFYUI_SERVER_URL        Defaults to http://127.0.0.1:8188.
   COMFYUI_CHECKPOINT        Checkpoint file name for the built-in workflow.
   COMFYUI_WORKFLOW_FILE     Optional path to an API-format workflow JSON.
-  COWART_COMFYUI_TIMEOUT    Polling timeout in seconds (default 600).`);
+  COWART_COMFYUI_TIMEOUT    Polling timeout in seconds (default 600).
+
+Options:
+  --profile <name|id>       Use a saved Cowart provider profile (comfyui type) instead of the default section.`);
 }
 
 function parseArgs(argv) {
@@ -64,7 +67,17 @@ async function readJsonIfExists(filePath) {
   }
 }
 
-async function readComfyuiConfig() {
+async function readComfyuiConfig(profileRef = null) {
+  if (nonEmptyString(profileRef)) {
+    const { findCowartProfile } = await import("../mcp/lib/canvas-storage.mjs");
+    const profile = await findCowartProfile(profileRef);
+    if (!profile) throw new Error(`No Cowart provider profile named "${profileRef}".`);
+    if (profile.provider !== "comfyui") {
+      throw new Error(`Profile "${profile.name}" is a ${profile.provider} profile, expected a comfyui profile.`);
+    }
+    return profile.settings;
+  }
+
   const configDir =
     nonEmptyString(process.env.COWART_CONFIG_DIR) ||
     (nonEmptyString(process.env.APPDATA) ? join(process.env.APPDATA, "Cowart") : join(homedir(), ".cowart"));
@@ -335,7 +348,7 @@ async function main() {
     return;
   }
 
-  const config = await readComfyuiConfig();
+  const config = await readComfyuiConfig(args.profile);
   const serverUrl = (
     nonEmptyString(args["server-url"]) ||
     nonEmptyString(process.env.COMFYUI_SERVER_URL) ||

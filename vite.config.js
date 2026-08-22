@@ -5,9 +5,13 @@ import { createReadStream, readFileSync } from 'node:fs'
 import { copyFile, mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, extname, join, relative, resolve, sep } from 'node:path'
 import {
+  deleteCowartProfile,
+  publicProfiles,
   publicProviderConfig,
   readCowartModelPreferences,
+  readCowartProfiles,
   readCowartProviderConfig,
+  saveCowartProfile,
   writeCowartModelPreferences,
   writeCowartProviderConfig
 } from './mcp/lib/canvas-storage.mjs'
@@ -762,8 +766,10 @@ function canvasStoragePlugin() {
         try {
           if (req.method === 'GET') {
             const { config, providerConfigFile } = await readCowartProviderConfig()
+            const { profiles } = await readCowartProfiles()
             sendJson(res, 200, {
               config: publicProviderConfig(config),
+              profiles: publicProfiles(profiles),
               path: providerConfigFile
             })
             return
@@ -779,6 +785,41 @@ function canvasStoragePlugin() {
 
           res.statusCode = 405
           res.setHeader('allow', 'GET, PUT')
+          res.end()
+        } catch (error) {
+          sendJson(res, 500, { error: error.message })
+        }
+      })
+
+      server.middlewares.use('/api/profiles', async (req, res) => {
+        try {
+          if (req.method === 'GET') {
+            const { profiles, providerConfigFile } = await readCowartProfiles()
+            sendJson(res, 200, {
+              profiles: publicProfiles(profiles),
+              path: providerConfigFile
+            })
+            return
+          }
+
+          if (req.method === 'POST') {
+            const body = await readRequestBody(req)
+            const profile = JSON.parse(body)
+            const result = await saveCowartProfile(profile)
+            sendJson(res, 200, { ok: true, profile: result.profile, path: result.path })
+            return
+          }
+
+          if (req.method === 'DELETE') {
+            const body = await readRequestBody(req)
+            const payload = JSON.parse(body || '{}')
+            const result = await deleteCowartProfile(payload.profileId)
+            sendJson(res, 200, { ok: true, profiles: result.profiles, path: result.path })
+            return
+          }
+
+          res.statusCode = 405
+          res.setHeader('allow', 'GET, POST, DELETE')
           res.end()
         } catch (error) {
           sendJson(res, 500, { error: error.message })

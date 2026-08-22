@@ -19,7 +19,10 @@ Environment:
   DASHSCOPE_WORKSPACE_ID         Used when DASHSCOPE_BASE_URL is not set.
   DASHSCOPE_REGION               Defaults to cn-beijing.
   COWART_DASHSCOPE_IMAGE_MODEL   Defaults to wan2.7-image-pro.
-  COWART_DASHSCOPE_IMAGE_SIZE    Defaults to 2K when width/height are not provided.`);
+  COWART_DASHSCOPE_IMAGE_SIZE    Defaults to 2K when width/height are not provided.
+
+Options:
+  --profile <name|id>            Use a saved Cowart provider profile (dashscope type) instead of the default section.`);
 }
 
 function parseArgs(argv) {
@@ -64,7 +67,17 @@ async function readJsonIfExists(filePath) {
   }
 }
 
-async function readDashscopeConfig() {
+async function readDashscopeConfig(profileRef = null) {
+  if (nonEmptyString(profileRef)) {
+    const { findCowartProfile } = await import("../mcp/lib/canvas-storage.mjs");
+    const profile = await findCowartProfile(profileRef);
+    if (!profile) throw new Error(`No Cowart provider profile named "${profileRef}".`);
+    if (profile.provider !== "dashscope") {
+      throw new Error(`Profile "${profile.name}" is a ${profile.provider} profile, expected a dashscope profile.`);
+    }
+    return profile.settings;
+  }
+
   const explicitConfig = nonEmptyString(process.env.COWART_DASHSCOPE_CONFIG);
   const configDir = nonEmptyString(process.env.COWART_CONFIG_DIR) || cowartConfigDir();
 
@@ -201,7 +214,7 @@ async function main() {
     return;
   }
 
-  const dashscopeConfig = await readDashscopeConfig();
+  const dashscopeConfig = await readDashscopeConfig(args.profile);
   const apiKey = nonEmptyString(process.env.DASHSCOPE_API_KEY) || nonEmptyString(dashscopeConfig.apiKey);
   if (!apiKey) throw new Error("DASHSCOPE_API_KEY is required.");
 

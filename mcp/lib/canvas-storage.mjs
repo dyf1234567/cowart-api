@@ -785,6 +785,7 @@ export function defaultCowartModelPreferences() {
     version: 1,
     imageProvider: "openai",
     imageModel: "openai",
+    imageProfileId: null,
     updatedAt: null,
   };
 }
@@ -795,7 +796,10 @@ function isModelPreferences(value) {
     typeof value === "object" &&
     value.version === 1 &&
     COWART_IMAGE_PROVIDERS.includes(value.imageProvider) &&
-    (typeof value.imageModel === "string" || value.imageModel === null)
+    (typeof value.imageModel === "string" || value.imageModel === null) &&
+    (value.imageProfileId === undefined ||
+      typeof value.imageProfileId === "string" ||
+      value.imageProfileId === null)
   );
 }
 
@@ -822,6 +826,7 @@ export async function writeCowartModelPreferences(args = {}, preferences) {
   const preferencesFile = resolveModelPreferencesFile(args);
   const payload = {
     ...preferences,
+    imageProfileId: preferences.imageProfileId ?? null,
     updatedAt: preferences.updatedAt ?? new Date().toISOString(),
   };
   await writeJsonAtomic(preferencesFile, payload);
@@ -1002,5 +1007,228 @@ export async function writeCowartProviderConfig(patch = {}) {
   const providerConfigFile = resolveProviderConfigFile();
   await writeJsonAtomic(providerConfigFile, next);
   return { ok: true, path: providerConfigFile, config: publicProviderConfig(next) };
+}
+
+// ---------------------------------------------------------------------------
+// Cowart provider profiles: multiple named configurations per provider type.
+// The legacy single sections (dashscope/custom/comfyui) remain as fallbacks;
+// saving a profile also mirrors its settings into the matching legacy section
+// so scripts and older consumers keep working.
+// ---------------------------------------------------------------------------
+
+export const COWART_PROFILE_PROVIDERS = ["dashscope", "custom", "comfyui"];
+
+function profileSettingsDefaults(provider) {
+  if (provider === "dashscope") return { apiKey: "", baseUrl: "", model: DEFAULT_DASHSCOPE_MODEL };
+  if (provider === "custom") return { apiKey: "", baseUrl: "", model: "" };
+  if (provider === "comfyui") {
+    return {
+      serverUrl: DEFAULT_COMFYUI_SERVER_URL,
+      checkpoint: "",
+      workflow: "",
+      promptNodePath: "",
+      negativeNodePath: "",
+      imageNodePath: "",
+      denoise: 0.75,
+    };
+  }
+  return {};
+}
+
+function newCowartProfileId() {
+  return `profile-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function normalizeProfileSettings(provider, settings = {}, existing = {}) {
+  const defaults = profileSettingsDefaults(provider);
+  const source = settings && typeof settings === "object" ? settings : {};
+  const fallback = existing && typeof existing === "object" ? existing : {};
+  const next = { ...defaults };
+  for (const [key, value] of Object.entries(defaults)) {
+    const candidate = key in source ? source[key] : fallback[key];
+    if (typeof value === "number") {
+      if (typeof candidate === "number" && Number.isFinite(candidate)) next[key] = candidate;
+    } else if (typeof candidate === "string") {
+      next[key] = candidate;
+    }
+  }
+  // Keep the previous API key when the incoming value is empty.
+  if ("apiKey" in next && !next.apiKey.trim() && typeof fallback.apiKey === "string") {
+    next.apiKey = fallback.apiKey;
+  }
+  if ("baseUrl" in next) next.baseUrl = next.baseUrl.trim().replace(/\/+$/, "");
+  if (provider === "dashscope" && !next.model.trim()) next.model = DEFAULT_DASHSCOPE_MODEL;
+  if (provider === "custom") next.model = next.model.trim();
+  if (provider === "comfyui") {
+    next.serverUrl = next.serverUrl.trim().replace(/\/+$/, "") || DEFAULT_COMFYUI_SERVER_URL;
+    if (typeof next.denoise === "number") next.denoise = Math.min(1, Math.max(0, next.denoise));
+  }
+  return next;
+}
+
+function normalizeStoredProfile(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const provider = COWART_PROFILE_PROVIDERS.includes(raw.provider) ? raw.provider : null;
+  const name = typeof raw.name === "string" ? raw.name.trim() : "";
+  if (!provider || !name) return null;
+  const id = typeof raw.id === "string" && raw.id.trim() ? raw.id.trim() : newCowartProfileId();
+  return { id, name, provider, settings: normalizeProfileSettings(provider, raw.settings, {}) };
+}
+
+function publicProfileSettings(profile) {
+  const { provider, settings } = profile;
+  if (provider === "comfyui") {
+    return {
+      configured: Boolean(
+        settings.serverUrl.trim() || settings.checkpoint.trim() || settings.workflow.trim(),
+      ),
+      serverUrl: settings.serverUrl,
+      checkpoint: settings.checkpoint,
+      workflow: settings.workflow,
+      promptNodePath: settings.promptNodePath,
+      negativeNodePath: settings.negativeNodePath,
+      imageNodePath: settings.imageNodePath,
+      denoise: settings.denoise,
+    };
+  }
+  const { apiKey, ...rest } = settings;
+  return { ...rest, ...maskApiKey(apiKey) };
+}
+
+export function publicProfiles(profiles) {
+  return (Array.isArray(profiles) ? profiles : []).map((profile) => ({
+    id: profile.id,
+    name: profile.name,
+    provider: profile.provider,
+    settings: publicProfileSettings(profile),
+  }));
+}
+
+export async function readCowartProfiles() {
+  const providerConfigFile = resolveProviderConfigFile();
+  let raw = {};
+  let missingFile = true;
+  try {
+    raw = await readJsonFile(providerConfigFile);
+    missingFile = false;
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+
+  const stored = Array.isArray(raw.profiles) ? raw.profiles : null;
+  if (stored) {
+    return {
+      profiles: stored.map(normalizeStoredProfile).filter(Boolean),
+      providerConfigFile,
+    };
+  }
+
+  // One-time migration: turn configured legacy single sections into profiles.
+  const profiles = [];
+  const legacy = raw && typeof raw === "object" ? raw : {};
+  if (legacy.dashscope?.apiKey?.trim()) {
+    profiles.push({
+      id: newCowartProfileId(),
+      name: "阿里千问",
+      provider: "dashscope",
+      settings: normalizeProfileSettings("dashscope", legacy.dashscope, {}),
+    });
+  }
+  if (legacy.custom?.apiKey?.trim() || legacy.custom?.baseUrl?.trim()) {
+    profiles.push({
+      id: newCowartProfileId(),
+      name: "自定义 API",
+      provider: "custom",
+      settings: normalizeProfileSettings("custom", legacy.custom, {}),
+    });
+  }
+  if (
+    (legacy.comfyui?.checkpoint?.trim() || legacy.comfyui?.workflow?.trim()) ||
+    (legacy.comfyui?.serverUrl?.trim() &&
+      legacy.comfyui.serverUrl.trim() !== DEFAULT_COMFYUI_SERVER_URL)
+  ) {
+    profiles.push({
+      id: newCowartProfileId(),
+      name: "本地 ComfyUI",
+      provider: "comfyui",
+      settings: normalizeProfileSettings("comfyui", legacy.comfyui, {}),
+    });
+  }
+  if (!missingFile) {
+    await writeJsonAtomic(providerConfigFile, { ...legacy, profiles });
+  }
+  return { profiles, providerConfigFile };
+}
+
+export async function saveCowartProfile(profile = {}) {
+  const provider = COWART_PROFILE_PROVIDERS.includes(profile.provider) ? profile.provider : null;
+  const name = nonEmptyString(profile.name);
+  if (!provider) {
+    throw new Error("Expected profile.provider to be dashscope, custom or comfyui.");
+  }
+  if (!name) throw new Error("Expected profile.name to be a non-empty string.");
+
+  const { profiles, providerConfigFile } = await readCowartProfiles();
+  const requestedId = nonEmptyString(profile.id);
+  const existing = requestedId ? profiles.find((entry) => entry.id === requestedId) : null;
+  const next = {
+    id: existing?.id ?? newCowartProfileId(),
+    name,
+    provider: existing?.provider ?? provider,
+    settings: normalizeProfileSettings(
+      existing?.provider ?? provider,
+      profile.settings,
+      existing?.settings ?? {},
+    ),
+  };
+  const nextProfiles = existing
+    ? profiles.map((entry) => (entry.id === next.id ? next : entry))
+    : [...profiles, next];
+
+  const { config } = await readCowartProviderConfig();
+  const payload = {
+    dashscope: config.dashscope,
+    custom: config.custom,
+    comfyui: config.comfyui,
+    profiles: nextProfiles,
+    updatedAt: new Date().toISOString(),
+  };
+  // Mirror the saved profile into its legacy section for older consumers.
+  payload[next.provider] = next.settings;
+  await writeJsonAtomic(providerConfigFile, payload);
+  return {
+    ok: true,
+    path: providerConfigFile,
+    profile: { id: next.id, name: next.name, provider: next.provider, settings: publicProfileSettings(next) },
+  };
+}
+
+export async function deleteCowartProfile(profileId) {
+  const id = nonEmptyString(profileId);
+  if (!id) throw new Error("profileId is required to delete a Cowart profile.");
+  const { profiles, providerConfigFile } = await readCowartProfiles();
+  const nextProfiles = profiles.filter((entry) => entry.id !== id);
+  if (nextProfiles.length === profiles.length) {
+    throw new Error(`No Cowart provider profile with id ${id}.`);
+  }
+  const { config } = await readCowartProviderConfig();
+  const payload = {
+    dashscope: config.dashscope,
+    custom: config.custom,
+    comfyui: config.comfyui,
+    profiles: nextProfiles,
+    updatedAt: new Date().toISOString(),
+  };
+  await writeJsonAtomic(providerConfigFile, payload);
+  return { ok: true, path: providerConfigFile, profiles: publicProfiles(nextProfiles) };
+}
+
+export async function findCowartProfile(reference) {
+  const query = nonEmptyString(reference);
+  if (!query) return null;
+  const { profiles } = await readCowartProfiles();
+  return (
+    profiles.find((entry) => entry.id === query || entry.name === query) ?? null
+  );
 }
 

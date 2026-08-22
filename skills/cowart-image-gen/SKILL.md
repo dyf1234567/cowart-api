@@ -74,6 +74,8 @@ meta flag. Support both shapes.
 
    All provider scripts print JSON containing `outputPath`. Use that exact local image path for insertion. Generation and editing are both supported: pass one or more `--reference <image-path>` arguments to perform image-to-image / reference-based generation on any provider script.
 
+   The user can save multiple named provider profiles. When the preference contains a non-null `imageProfileId`, append `--profile <imageProfileId>` to the provider script so it uses that exact profile; `get_cowart_provider_config` returns the full profile list (names, ids, and masked settings) when you need to inspect them.
+
    Example provider commands:
 
    ```bash
@@ -86,6 +88,9 @@ meta flag. Support both shapes.
 
    node scripts/generate-comfyui-image.mjs \
      --prompt "..." --width 1024 --height 1024
+
+   node scripts/generate-custom-api-image.mjs \
+     --prompt "..." --width 1024 --height 1024 --profile "<imageProfileId>"
    ```
 
    Credentials are stored machine-locally outside the project (the user's Cowart config directory) and can be edited from the canvas main menu (`模型选择` → `配置`). The scripts read that config automatically; environment variables still override the UI config when both are present:

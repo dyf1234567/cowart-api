@@ -23,12 +23,16 @@ import {
   readCowartCanvasState,
   readCowartModelPreferences,
   readCowartPageAsset,
+  readCowartProfiles,
   readCowartProviderConfig,
   readCowartSelectionState,
   readCowartViewState,
   resolveCanvasDir,
   resolveCowartPaths,
   saveCowartCanvasSnapshot,
+  saveCowartProfile,
+  deleteCowartProfile,
+  publicProfiles,
   writeCowartModelPreferences,
   writeCowartPageAsset,
   writeCowartProviderConfig,
@@ -59,6 +63,8 @@ const TOOL_GET_MODEL_PREFERENCES = "get_cowart_model_preferences";
 const TOOL_SAVE_MODEL_PREFERENCES = "save_cowart_model_preferences";
 const TOOL_GET_PROVIDER_CONFIG = "get_cowart_provider_config";
 const TOOL_SAVE_PROVIDER_CONFIG = "save_cowart_provider_config";
+const TOOL_SAVE_PROFILE = "save_cowart_provider_profile";
+const TOOL_DELETE_PROFILE = "delete_cowart_provider_profile";
 
 const execFileAsync = promisify(execFile);
 
@@ -1446,6 +1452,7 @@ function registerCowartStateTools(mcpServer) {
     },
     async () => {
       const { config, providerConfigFile } = await readCowartProviderConfig();
+      const { profiles } = await readCowartProfiles();
       return {
         content: [
           {
@@ -1453,7 +1460,7 @@ function registerCowartStateTools(mcpServer) {
             text: `Loaded Cowart provider config from ${providerConfigFile}.`,
           },
         ],
-        structuredContent: { config, path: providerConfigFile },
+        structuredContent: { config, profiles: publicProfiles(profiles), path: providerConfigFile },
       };
     },
   );
@@ -1483,6 +1490,82 @@ function registerCowartStateTools(mcpServer) {
             {
               type: "text",
               text: `Saved Cowart provider config to ${result.path}.`,
+            },
+          ],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return {
+          isError: true,
+          content: [{ type: "text", text: error?.message ?? String(error) }],
+        };
+      }
+    },
+  );
+
+  mcpServer.registerTool(
+    TOOL_SAVE_PROFILE,
+    {
+      title: "Save Cowart Provider Profile",
+      description:
+        "Create or update a named Cowart image provider profile (dashscope, custom, or comfyui). Provide an existing profile.id to update; omit it to create a new profile. Empty apiKey values keep the previously stored key. Returns the saved profile with its API key masked.",
+      inputSchema: {
+        ...projectArgsSchema,
+        profile: z.any(),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async (input = {}) => {
+      try {
+        const result = await saveCowartProfile(input.profile ?? {});
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Saved Cowart provider profile "${result.profile.name}" to ${result.path}.`,
+            },
+          ],
+          structuredContent: result,
+        };
+      } catch (error) {
+        return {
+          isError: true,
+          content: [{ type: "text", text: error?.message ?? String(error) }],
+        };
+      }
+    },
+  );
+
+  mcpServer.registerTool(
+    TOOL_DELETE_PROFILE,
+    {
+      title: "Delete Cowart Provider Profile",
+      description:
+        "Delete a named Cowart image provider profile by its profileId. Returns the remaining profiles with API keys masked.",
+      inputSchema: {
+        ...projectArgsSchema,
+        profileId: z.string(),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+    },
+    async (input = {}) => {
+      try {
+        const result = await deleteCowartProfile(input.profileId);
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Deleted Cowart provider profile ${input.profileId}.`,
             },
           ],
           structuredContent: result,
