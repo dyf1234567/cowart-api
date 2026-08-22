@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { deleteCowartProfile, saveCowartProfile } from './cowartClient.js'
+import { deleteCowartProfile, hasCowartWidgetBridge, saveCowartProfile } from './cowartClient.js'
 
 export const PROFILE_TYPE_OPTIONS = [
   { id: 'custom', label: '自定义 API（OpenAI 兼容）' },
@@ -56,6 +56,8 @@ export function CowartProviderConfigDialog({ profile, defaultProvider = 'custom'
   const [isDeleting, setIsDeleting] = useState(false)
   const [message, setMessage] = useState('')
   const [toast, setToast] = useState('')
+  // Codex widget 内保存走宿主代理，可能因宿主限制失败；此时给出替代保存方式。
+  const [saveFallback, setSaveFallback] = useState(null)
 
   useEffect(() => {
     // 新建时切换类型会重置表单字段，避免残留其它类型的值。
@@ -72,6 +74,7 @@ export function CowartProviderConfigDialog({ profile, defaultProvider = 'custom'
     event.preventDefault()
     setIsSaving(true)
     setMessage('')
+    setSaveFallback(null)
 
     const trimmedName = name.trim()
     if (!trimmedName) {
@@ -131,13 +134,15 @@ export function CowartProviderConfigDialog({ profile, defaultProvider = 'custom'
       return
     }
 
+    const profilePayload = {
+      id: profile?.id,
+      name: trimmedName,
+      provider,
+      settings: payload
+    }
+
     try {
-      const result = await saveCowartProfile({
-        id: profile?.id,
-        name: trimmedName,
-        provider,
-        settings: payload
-      })
+      const result = await saveCowartProfile(profilePayload)
       setApiKeyInput('')
       setToast('已保存')
       window.setTimeout(() => {
@@ -145,9 +150,27 @@ export function CowartProviderConfigDialog({ profile, defaultProvider = 'custom'
         onClose()
       }, 700)
     } catch (error) {
-      setMessage(`保存失败：${error instanceof Error ? error.message : String(error)}`)
+      const reason = error instanceof Error ? error.message : String(error)
+      if (hasCowartWidgetBridge()) {
+        // 服务端本身可用（代理直连验证过），失败来自 Codex 宿主的 widget 工具转发层。
+        setSaveFallback({ reason, profileJson: JSON.stringify(profilePayload, null, 2) })
+        setMessage('保存失败：Codex 组件内的保存通道当前不可用，请使用下方替代方式保存。')
+      } else {
+        setMessage(`保存失败：${reason}`)
+      }
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  async function copyFallbackProfile() {
+    if (!saveFallback) return
+    try {
+      await navigator.clipboard.writeText(saveFallback.profileJson)
+      setToast('已复制画像 JSON')
+      window.setTimeout(() => setToast(''), 1500)
+    } catch {
+      setMessage('自动复制失败，请在下方文本框手动全选复制')
     }
   }
 
@@ -403,6 +426,38 @@ export function CowartProviderConfigDialog({ profile, defaultProvider = 'custom'
               />
             </label>
           </>
+        )}
+
+        {saveFallback && (
+          <div className="cowart-config-field">
+            <span>替代保存方式</span>
+            <p className="cowart-config-message">
+              原因：{saveFallback.reason}
+              。可复制下方画像 JSON 发给 Codex 助手，请它调用保存画像工具代为保存；或在本地画布页面的画像管理中添加。
+            </p>
+            <textarea
+              className="cowart-config-textarea"
+              onClick={(event) => {
+                stopInputEvent(event)
+                event.target.select()
+              }}
+              onKeyDown={stopInputEvent}
+              onPointerDown={stopInputEvent}
+              readOnly
+              rows={6}
+              value={saveFallback.profileJson}
+            />
+            <button
+              onClick={(event) => {
+                event.preventDefault()
+                copyFallbackProfile()
+              }}
+              onPointerDown={stopInputEvent}
+              type="button"
+            >
+              复制画像 JSON
+            </button>
+          </div>
         )}
 
         <div className="cowart-config-actions">
