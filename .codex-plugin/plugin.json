@@ -1,6 +1,6 @@
 {
   "name": "cowart-api",
-  "version": "0.1.32",
+  "version": "0.1.33",
   "description": "A native Codex widget canvas powered by tldraw and built for visual thinking, image generation, and annotation-driven edits. Merged edition with DashScope, custom OpenAI-compatible API and local ComfyUI image providers. Based on Cowart by ZHONG XIN (zhongerxin/Cowart).",
   "author": {
     "name": "dyf1234567"
