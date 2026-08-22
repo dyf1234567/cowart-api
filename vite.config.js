@@ -591,6 +591,24 @@ function canvasStoragePlugin() {
   return {
     name: 'cowart-canvas-storage',
     configureServer(server) {
+      // Codex widget 的宿主代理可能拒绝写调用，此时 widget 会回退到本服务的 HTTP 接口；
+      // widget iframe 与本地服务不同源，需要放行 CORS。放在最前面，抢在其它中间件之前处理预检。
+      server.middlewares.use((req, res, next) => {
+        if (!req.url?.startsWith('/api/')) {
+          next()
+          return
+        }
+        res.setHeader('access-control-allow-origin', '*')
+        res.setHeader('access-control-allow-methods', 'GET, PUT, POST, DELETE, OPTIONS')
+        res.setHeader('access-control-allow-headers', 'content-type')
+        if (req.method === 'OPTIONS') {
+          res.statusCode = 204
+          res.end()
+          return
+        }
+        next()
+      })
+
       server.middlewares.use(serveCanvasAsset)
 
       server.middlewares.use('/api/html-draft', async (req, res) => {
@@ -887,6 +905,8 @@ export default defineConfig({
   },
   server: {
     host: '127.0.0.1',
-    port: 43217
+    port: 43217,
+    // 关闭内置 CORS，由上方自定义中间件统一处理 /api/ 的跨源头，避免预检响应被内置逻辑吞掉。
+    cors: false
   }
 })

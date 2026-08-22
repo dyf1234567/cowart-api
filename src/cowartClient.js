@@ -21,6 +21,14 @@ const TOOL_SAVE_PROVIDER_CONFIG = 'save_cowart_provider_config'
 const TOOL_SAVE_PROFILE = 'save_cowart_provider_profile'
 const TOOL_DELETE_PROFILE = 'delete_cowart_provider_profile'
 const WIDGET_PAYLOAD_TIMEOUT_MS = 5000
+// Codex 宿主代理可能拒绝 widget 发起的部分写调用（-32000），
+// 此时回退到本地 Cowart 开发服务的 HTTP 接口（vite 默认 43217，被占用时递增）。
+const HTTP_FALLBACK_BASES = [
+  'http://127.0.0.1:43217',
+  'http://127.0.0.1:43218',
+  'http://127.0.0.1:43219'
+]
+let resolvedHttpFallbackBase = null
 
 globalThis.__COWART_WIDGET_FETCH_GUARD__ = true
 
@@ -117,6 +125,23 @@ async function fetchJson(url, options = {}) {
   return response.json()
 }
 
+// widget 桥调用失败后，依次尝试本地开发服务端口；全部失败则抛出原始桥错误。
+async function httpFallback(requestFactory, bridgeError) {
+  const bases = resolvedHttpFallbackBase
+    ? [resolvedHttpFallbackBase]
+    : HTTP_FALLBACK_BASES
+  for (const base of bases) {
+    try {
+      const result = await requestFactory(base)
+      resolvedHttpFallbackBase = base
+      return result
+    } catch {
+      /* 尝试下一个端口 */
+    }
+  }
+  throw bridgeError
+}
+
 export async function loadCowartCanvasState(signal) {
   if (hasCowartWidgetBridge()) {
     const state = await callCowartServerTool(
@@ -160,11 +185,22 @@ export async function refreshCowartCanvasSnapshot(signal) {
 
 export async function saveCowartCanvasSnapshot(snapshot, options = {}) {
   if (hasCowartWidgetBridge()) {
-    return callCowartServerTool(TOOL_SAVE_CANVAS_STATE, {
-      snapshot,
-      protectImageRecords: options.protectImageRecords,
-      acknowledgedImageShapeDeletes: options.acknowledgedImageShapeDeletes
-    })
+    try {
+      return await callCowartServerTool(TOOL_SAVE_CANVAS_STATE, {
+        snapshot,
+        protectImageRecords: options.protectImageRecords,
+        acknowledgedImageShapeDeletes: options.acknowledgedImageShapeDeletes
+      })
+    } catch (bridgeError) {
+      return httpFallback(
+        (base) => fetchJson(`${base}${CANVAS_ENDPOINT}`, {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(snapshot)
+        }),
+        bridgeError
+      )
+    }
   }
 
   return fetchJson(CANVAS_ENDPOINT, {
@@ -176,7 +212,18 @@ export async function saveCowartCanvasSnapshot(snapshot, options = {}) {
 
 export async function saveCowartSelectionState(selection) {
   if (hasCowartWidgetBridge()) {
-    return callCowartServerTool(TOOL_SAVE_SELECTION_STATE, { selection })
+    try {
+      return await callCowartServerTool(TOOL_SAVE_SELECTION_STATE, { selection })
+    } catch (bridgeError) {
+      return httpFallback(
+        (base) => fetchJson(`${base}${SELECTION_ENDPOINT}`, {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(selection)
+        }),
+        bridgeError
+      )
+    }
   }
 
   return fetchJson(SELECTION_ENDPOINT, {
@@ -188,7 +235,18 @@ export async function saveCowartSelectionState(selection) {
 
 export async function saveCowartViewState(viewState) {
   if (hasCowartWidgetBridge()) {
-    return callCowartServerTool(TOOL_SAVE_VIEW_STATE, { viewState })
+    try {
+      return await callCowartServerTool(TOOL_SAVE_VIEW_STATE, { viewState })
+    } catch (bridgeError) {
+      return httpFallback(
+        (base) => fetchJson(`${base}${VIEW_STATE_ENDPOINT}`, {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(viewState)
+        }),
+        bridgeError
+      )
+    }
   }
 
   return fetchJson(VIEW_STATE_ENDPOINT, {
@@ -231,11 +289,22 @@ export async function updateCowartHtmlDraft({ draftShapeId, htmlContent }) {
     })
   }
 
-  return callCowartServerTool(TOOL_INSERT_HTML_DRAFT, {
-    draftShapeId,
-    htmlContent,
-    updateExistingDraft: true
-  })
+  try {
+    return await callCowartServerTool(TOOL_INSERT_HTML_DRAFT, {
+      draftShapeId,
+      htmlContent,
+      updateExistingDraft: true
+    })
+  } catch (bridgeError) {
+    return httpFallback(
+      (base) => fetchJson(`${base}/api/html-draft`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ draftShapeId, htmlContent })
+      }),
+      bridgeError
+    )
+  }
 }
 
 export async function readCowartPageAsset(assetUrl, options = {}) {
@@ -258,7 +327,18 @@ export async function loadCowartModelPreferences(signal) {
 
 export async function saveCowartModelPreferences(preferences) {
   if (hasCowartWidgetBridge()) {
-    return callCowartServerTool(TOOL_SAVE_MODEL_PREFERENCES, { preferences })
+    try {
+      return await callCowartServerTool(TOOL_SAVE_MODEL_PREFERENCES, { preferences })
+    } catch (bridgeError) {
+      return httpFallback(
+        (base) => fetchJson(`${base}${MODEL_PREFERENCES_ENDPOINT}`, {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(preferences)
+        }),
+        bridgeError
+      )
+    }
   }
 
   return fetchJson(MODEL_PREFERENCES_ENDPOINT, {
@@ -290,7 +370,18 @@ export async function loadCowartProfiles(signal) {
 
 export async function saveCowartProfile(profile) {
   if (hasCowartWidgetBridge()) {
-    return callCowartServerTool(TOOL_SAVE_PROFILE, { profile })
+    try {
+      return await callCowartServerTool(TOOL_SAVE_PROFILE, { profile })
+    } catch (bridgeError) {
+      return httpFallback(
+        (base) => fetchJson(`${base}${PROFILES_ENDPOINT}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(profile)
+        }),
+        bridgeError
+      )
+    }
   }
 
   return fetchJson(PROFILES_ENDPOINT, {
@@ -302,7 +393,18 @@ export async function saveCowartProfile(profile) {
 
 export async function deleteCowartProfile(profileId) {
   if (hasCowartWidgetBridge()) {
-    return callCowartServerTool(TOOL_DELETE_PROFILE, { profileId })
+    try {
+      return await callCowartServerTool(TOOL_DELETE_PROFILE, { profileId })
+    } catch (bridgeError) {
+      return httpFallback(
+        (base) => fetchJson(`${base}${PROFILES_ENDPOINT}`, {
+          method: 'DELETE',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ profileId })
+        }),
+        bridgeError
+      )
+    }
   }
 
   return fetchJson(PROFILES_ENDPOINT, {
@@ -314,7 +416,18 @@ export async function deleteCowartProfile(profileId) {
 
 export async function saveCowartProviderConfig(configPatch) {
   if (hasCowartWidgetBridge()) {
-    return callCowartServerTool(TOOL_SAVE_PROVIDER_CONFIG, { config: configPatch })
+    try {
+      return await callCowartServerTool(TOOL_SAVE_PROVIDER_CONFIG, { config: configPatch })
+    } catch (bridgeError) {
+      return httpFallback(
+        (base) => fetchJson(`${base}${PROVIDER_CONFIG_ENDPOINT}`, {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(configPatch)
+        }),
+        bridgeError
+      )
+    }
   }
 
   return fetchJson(PROVIDER_CONFIG_ENDPOINT, {

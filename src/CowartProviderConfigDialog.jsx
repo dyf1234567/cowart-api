@@ -434,6 +434,7 @@ export function CowartProviderConfigDialog({ profile, defaultProvider = 'custom'
             <p className="cowart-config-message">
               原因：{saveFallback.reason}
               。可复制下方画像 JSON 发给 Codex 助手，请它调用保存画像工具代为保存；或在本地画布页面的画像管理中添加。
+              若本地开发服务（npm run dev）正在运行，widget 会自动改走本地 HTTP 接口，启动后重试即可。
             </p>
             <textarea
               className="cowart-config-textarea"

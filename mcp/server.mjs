@@ -97,7 +97,13 @@ const COWART_GOOGLE_DOMAINS = [
   "https://*.googleapis.com",
   "https://*.merchant-center-analytics.goog",
 ];
-const COWART_CONNECT_DOMAINS = [...COWART_GOOGLE_DOMAINS];
+// 宿主代理拒绝 widget 写调用时，widget 会回退到本地开发服务的 HTTP 接口（见 cowartClient.js）。
+const COWART_LOCAL_HTTP_DOMAINS = [
+  "http://127.0.0.1:43217",
+  "http://127.0.0.1:43218",
+  "http://127.0.0.1:43219",
+];
+const COWART_CONNECT_DOMAINS = [...COWART_GOOGLE_DOMAINS, ...COWART_LOCAL_HTTP_DOMAINS];
 const COWART_RESOURCE_DOMAINS = [
   "data:",
   "blob:",
