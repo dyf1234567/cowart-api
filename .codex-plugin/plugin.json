@@ -1,0 +1,45 @@
+{
+  "name": "cowart",
+  "version": "0.1.25",
+  "description": "A native Codex widget canvas powered by tldraw and built for visual thinking, image generation, and annotation-driven edits.",
+  "author": {
+    "name": "ZHONG XIN",
+    "email": "zhongxin123456@gmail.com",
+    "url": "https://www.jiqiren.ai"
+  },
+  "homepage": "https://www.jiqiren.ai",
+  "repository": "https://github.com/zhongerxin/Cowart",
+  "license": "MIT",
+  "keywords": [
+    "canvas",
+    "tldraw",
+    "whiteboard",
+    "image-generation",
+    "visual-collaboration"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Cowart",
+    "shortDescription": "Create, annotate, and generate on a native infinite-canvas widget in Codex.",
+    "longDescription": "Cowart brings a tldraw-powered native widget canvas into Codex for visual planning and creative iteration. Open a project-backed canvas, sketch ideas, place AI image holders, generate images into selected slots, and turn annotated screenshots into revised image outputs while keeping canvas data in the user's project workspace.",
+    "developerName": "ZHONG XIN",
+    "category": "Productivity",
+    "websiteURL": "https://www.jiqiren.ai",
+    "brandColor": "#25BFEF",
+    "logo": "./assets/app-icon.png",
+    "composerIcon": "./assets/app-icon.png",
+    "capabilities": [
+      "Interactive canvas",
+      "Native Codex widget",
+      "AI image generation",
+      "Annotation-driven editing",
+      "Project-local persistence"
+    ],
+    "defaultPrompt": [
+      "Open the Cowart canvas for this project.",
+      "Use my Cowart annotation screenshot to generate a clean revised image beside the original.",
+      "Generate a new image into the selected Cowart AI image holder."
+    ]
+  }
+}

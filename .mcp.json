@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "cowart_mcp": {
+      "title": "Cowart Canvas Widget MCP",
+      "description": "Render and persist the native Cowart Codex widget without opening a localhost page.",
+      "command": "node",
+      "args": [
+        "./scripts/start-mcp.mjs"
+      ],
+      "cwd": "."
+    }
+  }
+}

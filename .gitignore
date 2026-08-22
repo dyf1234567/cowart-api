@@ -1,0 +1,6 @@
+node_modules/
+dist/
+.DS_Store
+/canvas/
+/output/
+.codex-plugin/analytics.local.json
