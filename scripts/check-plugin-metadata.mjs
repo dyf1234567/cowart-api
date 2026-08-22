@@ -33,11 +33,11 @@ for (const [source, version] of versions) {
   );
 }
 
-assert.equal(pluginManifest.name, "cowart");
-assert.equal(pluginManifest.repository, "https://github.com/zhongerxin/Cowart");
+assert.equal(pluginManifest.name, "cowart-api");
+assert.equal(pluginManifest.repository, "https://github.com/dyf1234567/cowart-api");
 assert.equal(pluginManifest.license, "MIT");
 
-assert.equal(marketplace.name, "cowart-github");
+assert.equal(marketplace.name, "cowart-api-github");
 const marketplacePlugin = marketplace.plugins?.find(({ name }) => name === pluginManifest.name);
 assert.ok(marketplacePlugin, "marketplace must include the Cowart plugin");
 assert.equal(marketplacePlugin.source?.source, "local");

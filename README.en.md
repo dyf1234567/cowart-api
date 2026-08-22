@@ -27,9 +27,9 @@ The repository also conforms to [Agent Plugins v1.0.0](https://agent-plugins.org
 Send the following message to Codex:
 
 ```text
-Please install the Cowart Codex plugin through the Git marketplace bundled with its repository.
-First run codex plugin marketplace add zhongerxin/Cowart --ref main,
-then run codex plugin add cowart@cowart-github and use codex plugin list to confirm it is enabled.
+Please install the Cowart API edition Codex plugin through the Git marketplace bundled with its repository.
+First run codex plugin marketplace add dyf1234567/cowart-api --ref master,
+then run codex plugin add cowart-api@cowart-api-github and use codex plugin list to confirm it is enabled.
 When Cowart starts its MCP server for the first time, it automatically runs npm install in its own plugin directory;
 do not install dependencies manually in the current repository or a marketplace snapshot.
 Do not clone the repository into the personal marketplace. When installation finishes, clearly remind me
@@ -41,24 +41,24 @@ to completely quit and restart Codex once before using Cowart.
 First register the Cowart Git repository as a Codex marketplace:
 
 ```bash
-codex plugin marketplace add zhongerxin/Cowart --ref main
+codex plugin marketplace add dyf1234567/cowart-api --ref master
 ```
 
 Then install Cowart from that marketplace and verify it:
 
 ```bash
-codex plugin add cowart@cowart-github
+codex plugin add cowart-api@cowart-api-github
 codex plugin list
 ```
 
 You do not need to locate the plugin cache manually. When Cowart starts its MCP server for the first time, it checks its dependencies. If packages such as `tldraw` are missing, the startup script resolves the real plugin directory from its own location and automatically runs `npm install` there. The first startup requires working Node.js, npm, and network access, so it may take a few extra seconds.
 
-If `cowart-github` is already registered, skip the first `marketplace add` command. After installation, completely quit and restart Codex once so the new skills, MCP tools, and dependencies are fully loaded.
+If `cowart-api-github` is already registered, skip the first `marketplace add` command. After installation, completely quit and restart Codex once so the new skills, MCP tools, and dependencies are fully loaded.
 
-Codex automatically checks this Git marketplace when its plugin system starts and refreshes the installed Cowart plugin when the remote `main` branch changes. To check for an update immediately, run:
+Codex automatically checks this Git marketplace when its plugin system starts and refreshes the installed Cowart plugin when the remote `master` branch changes. To check for an update immediately, run:
 
 ```bash
-codex plugin marketplace upgrade cowart-github
+codex plugin marketplace upgrade cowart-api-github
 ```
 
 An update may replace the plugin cache. After updating, completely quit and restart Codex; Cowart checks for and installs missing dependencies the first time its MCP server starts after the restart.

@@ -1,11 +1,11 @@
 {
-  "name": "cowart-github",
+  "name": "cowart-api-github",
   "interface": {
-    "displayName": "Cowart GitHub"
+    "displayName": "Cowart API GitHub"
   },
   "plugins": [
     {
-      "name": "cowart",
+      "name": "cowart-api",
       "source": {
         "source": "local",
         "path": "."

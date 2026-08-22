@@ -1,14 +1,11 @@
 {
-  "name": "cowart",
+  "name": "cowart-api",
   "version": "0.1.25",
-  "description": "A native Codex widget canvas powered by tldraw and built for visual thinking, image generation, and annotation-driven edits.",
+  "description": "A native Codex widget canvas powered by tldraw and built for visual thinking, image generation, and annotation-driven edits. Merged edition with DashScope, custom OpenAI-compatible API and local ComfyUI image providers. Based on Cowart by ZHONG XIN (zhongerxin/Cowart).",
   "author": {
-    "name": "ZHONG XIN",
-    "email": "zhongxin123456@gmail.com",
-    "url": "https://www.jiqiren.ai"
+    "name": "dyf1234567"
   },
-  "homepage": "https://www.jiqiren.ai",
-  "repository": "https://github.com/zhongerxin/Cowart",
+  "repository": "https://github.com/dyf1234567/cowart-api",
   "license": "MIT",
   "keywords": [
     "canvas",
@@ -20,10 +17,10 @@
   "skills": "./skills/",
   "mcpServers": "./.mcp.json",
   "interface": {
-    "displayName": "Cowart",
+    "displayName": "Cowart API",
     "shortDescription": "Create, annotate, and generate on a native infinite-canvas widget in Codex.",
     "longDescription": "Cowart brings a tldraw-powered native widget canvas into Codex for visual planning and creative iteration. Open a project-backed canvas, sketch ideas, place AI image holders, generate images into selected slots, and turn annotated screenshots into revised image outputs while keeping canvas data in the user's project workspace.",
-    "developerName": "ZHONG XIN",
+    "developerName": "dyf1234567",
     "category": "Productivity",
     "websiteURL": "https://www.jiqiren.ai",
     "brandColor": "#25BFEF",

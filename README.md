@@ -27,9 +27,9 @@ English README: [README.en.md](README.en.md)
 把下面这段发给 Codex：
 
 ```text
-请通过 Cowart 仓库自带的 Git marketplace 安装 Cowart Codex 插件。
-先运行 codex plugin marketplace add zhongerxin/Cowart --ref main，
-再运行 codex plugin add cowart@cowart-github，并用 codex plugin list 确认插件已启用。
+请通过 Cowart 仓库自带的 Git marketplace 安装 Cowart API 版 Codex 插件。
+先运行 codex plugin marketplace add dyf1234567/cowart-api --ref master，
+再运行 codex plugin add cowart-api@cowart-api-github，并用 codex plugin list 确认插件已启用。
 Cowart 第一次启动 MCP 时会自动在插件自己的安装目录执行 npm install；
 不要在当前仓库或 marketplace 快照目录手动安装依赖。
 不要把仓库 clone 到 personal marketplace。安装完成后请明确提醒我：
@@ -41,24 +41,24 @@ Cowart 第一次启动 MCP 时会自动在插件自己的安装目录执行 npm 
 先把 Cowart 的 Git 仓库注册为 Codex marketplace：
 
 ```bash
-codex plugin marketplace add zhongerxin/Cowart --ref main
+codex plugin marketplace add dyf1234567/cowart-api --ref master
 ```
 
 再从这个 marketplace 安装并检查 Cowart：
 
 ```bash
-codex plugin add cowart@cowart-github
+codex plugin add cowart-api@cowart-api-github
 codex plugin list
 ```
 
 不需要手动查找插件缓存目录。Cowart 第一次启动 MCP 时会检查依赖；如果缺少 `tldraw` 等包，安装脚本会根据自身位置找到实际插件目录，并在那里自动执行 `npm install`。首次启动需要可用的 Node.js、npm 和网络，可能会比平时多等几秒。
 
-如果 `cowart-github` 已经注册，可以跳过第一条 `marketplace add` 命令。安装后请完全退出并重新启动一次 Codex，让新的 skill、MCP 工具和依赖完整加载。
+如果 `cowart-api-github` 已经注册，可以跳过第一条 `marketplace add` 命令。安装后请完全退出并重新启动一次 Codex，让新的 skill、MCP 工具和依赖完整加载。
 
-Codex 会在启动插件系统时自动检查这个 Git marketplace，并在远程 `main` 分支发生变化后刷新已安装的 Cowart。需要立即检查更新时，可以手动运行：
+Codex 会在启动插件系统时自动检查这个 Git marketplace，并在远程 `master` 分支发生变化后刷新已安装的 Cowart。需要立即检查更新时，可以手动运行：
 
 ```bash
-codex plugin marketplace upgrade cowart-github
+codex plugin marketplace upgrade cowart-api-github
 ```
 
 更新可能会替换插件缓存。更新后请完全退出并重新启动 Codex；Cowart 会在重启后的第一次 MCP 启动时重新检查并安装缺失依赖。
