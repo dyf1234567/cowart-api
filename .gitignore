@@ -4,3 +4,8 @@ dist/
 /canvas/
 /output/
 .codex-plugin/analytics.local.json
+
+# 本地凭据/配置，禁止入库
+provider-config.json
+.env
+.env.*
