@@ -198,8 +198,12 @@ async function generateViaEdits({ baseUrl, apiKey, model, prompt, size, n, refer
 }
 
 // 阿里系多模态生图路由：POST {baseUrl}/chat/completions，content 为 [{text}, {image}] 数组。
-async function generateViaChatMultimodal({ baseUrl, apiKey, model, prompt, referencePath }) {
-  const content = [{ text: prompt }];
+async function generateViaChatMultimodal({ baseUrl, apiKey, model, prompt, referencePath, size }) {
+  // 该路由会忽略请求体里的 size 参数（实测恒返默认尺寸）；把尺寸要求写进提示词文本可以让模型按比例出图。
+  const sizeInstruction = nonEmptyString(size)
+    ? `\nOutput image size: ${size.replace(/x/i, " x ")} pixels (width x height). Preserve this aspect ratio.`
+    : "";
+  const content = [{ text: `${prompt}${sizeInstruction}` }];
   if (referencePath) {
     const filePath = resolve(referencePath);
     const buffer = await readFile(filePath);
