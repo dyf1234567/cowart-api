@@ -289,7 +289,10 @@ async function main() {
   }
 
   if (!response.ok) {
-    throw new Error(`DashScope request failed: ${response.status} ${response.statusText}: ${text.slice(0, 1000)}`);
+    const baseHint = /url error/i.test(text)
+      ? "\nHint: this provider uses the native DashScope API. The base URL must end with /api/v1 (for example https://<workspace>.cn-beijing.maas.aliyuncs.com/api/v1), not the OpenAI-compatible /compatible-mode/v1 URL."
+      : "";
+    throw new Error(`DashScope request failed: ${response.status} ${response.statusText}: ${text.slice(0, 1000)}${baseHint}`);
   }
 
   const imageUrl = findImageUrl(payload);

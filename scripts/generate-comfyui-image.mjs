@@ -356,6 +356,15 @@ async function main() {
     DEFAULT_SERVER_URL
   ).replace(/\/+$/, "");
 
+  // 预检连通性，避免后续报错只显示含糊的 fetch failed。
+  try {
+    await fetch(`${serverUrl}/system_stats`, { signal: AbortSignal.timeout(5000) });
+  } catch (error) {
+    throw new Error(
+      `无法连接 ComfyUI 服务 ${serverUrl}（${error instanceof Error ? error.message : String(error)}）。请先启动 ComfyUI，或在画像配置里修改服务地址。`,
+    );
+  }
+
   const prompt = await readPrompt(args);
   const width = Number(args.width) > 0 ? Number(args.width) : 1024;
   const height = Number(args.height) > 0 ? Number(args.height) : 1024;
