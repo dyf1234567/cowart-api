@@ -78,6 +78,8 @@ import {
   downloadCowartFile,
   hasCowartWidgetBridge,
   loadCowartCanvasState,
+  loadCowartModelPreferences,
+  loadCowartProfiles,
   readCowartPageAsset,
   refreshCowartCanvasSnapshot,
   saveCowartCanvasSnapshot,
@@ -217,8 +219,7 @@ const AI_IMAGE_GENERATION_PROMPT_PREFIX = [
   '多张时必须分别生成对应数量的独立 bitmap，并作为多个普通图片形状从左到右平铺在画布上；第一张替换当前 AI 图片框，后续图片放在上一张图片右侧。',
   '插入多张图片时，第一张按默认流程替换 AI 图片框；之后每次使用上一张插入结果返回的 shapeId 作为 anchorShapeId，并设置 replaceAiImageHolder: false、matchAnchor: false、placement: "right"。',
   '不要把多张图片合成一张拼图、画册或带分页的单一产物。',
-  '如果附带一张或多张参考图，请把参考图作为视觉参考；不要把参考图文件名或任何界面元素画进最终图片。',
-  '不需要选择生图模型，使用 Codex 当前可用的图片生成能力。'
+  '如果附带一张或多张参考图，请把参考图作为视觉参考；不要把参考图文件名或任何界面元素画进最终图片。'
 ].join('\n')
 const AI_DRAFT_GENERATION_PROMPT_PREFIX = [
   '[@cowart](plugin://cowart@personal) 生成 AI HTML',
@@ -2559,12 +2560,59 @@ function aiImageReferenceLines({ references, referenceAttached }) {
   return lines
 }
 
-function buildAiImageGenerationPrompt({ holderShape, userPrompt, references, referenceAttached }) {
+const DEFAULT_IMAGE_PROVIDER_PROMPT_LINES = ['不需要选择生图模型，使用 Codex 当前可用的图片生成能力。']
+
+const PROFILE_PROVIDER_SCRIPTS = {
+  dashscope: 'scripts/generate-dashscope-image.mjs',
+  custom: 'scripts/generate-custom-api-image.mjs',
+  comfyui: 'scripts/generate-comfyui-image.mjs'
+}
+
+// 根据画布当前选择的图片画像生成提示词指令；未选择画像或读取失败时保持默认的 Codex 生图能力。
+async function aiImageProviderPromptLines() {
+  try {
+    const [preferences, profiles] = await Promise.all([
+      loadCowartModelPreferences(),
+      loadCowartProfiles()
+    ])
+    const profileId = preferences?.imageProfileId
+    const provider = preferences?.imageProvider
+    if (!provider || provider === 'openai') return DEFAULT_IMAGE_PROVIDER_PROMPT_LINES
+    // 旧版偏好没有 imageProfileId 时，退回按提供方（和模型名）匹配画像。
+    let profile = profileId ? profiles.find((item) => item.id === profileId) : null
+    if (!profile) {
+      const candidates = profiles.filter((item) => item.provider === provider)
+      profile =
+        candidates.find((item) => preferences?.imageModel && item.settings?.model === preferences.imageModel) ??
+        candidates[0] ??
+        null
+    }
+    const script = profile && PROFILE_PROVIDER_SCRIPTS[profile.provider]
+    if (!profile || !script) return DEFAULT_IMAGE_PROVIDER_PROMPT_LINES
+
+    const lines = [
+      `画布当前选择的图片提供方是 ${profile.provider}（画像名称：${profile.name}，画像 id：${profile.id}）。`
+    ]
+    if (profile.settings?.model) {
+      lines.push(`该画像配置的模型是 ${profile.settings.model}。`)
+    }
+    lines.push(
+      `请按照 cowart-image-gen 技能说明运行 Cowart 插件目录里的 ${script}，并追加 --profile "${profile.id}" 使用该画像；不要改用 Codex 默认的图片生成能力，也不要在该脚本失败时悄悄回退到其它提供方。`
+    )
+    return lines
+  } catch (error) {
+    console.warn('Cowart image provider preference could not be read; falling back to the default image provider.', error)
+    return DEFAULT_IMAGE_PROVIDER_PROMPT_LINES
+  }
+}
+
+function buildAiImageGenerationPrompt({ holderShape, userPrompt, references, referenceAttached, providerLines }) {
   const { targetWidth, targetHeight, ratio, ratioLabel } = formatAiImageGenerationTarget(holderShape)
   const referenceLines = aiImageReferenceLines({ references, referenceAttached })
 
   return [
     AI_IMAGE_GENERATION_PROMPT_PREFIX,
+    ...providerLines,
     '',
     `Cowart AI image holder shape: ${holderShape.id}`,
     `Target canvas slot: ${targetWidth} x ${targetHeight} canvas units.`,
@@ -2687,11 +2735,13 @@ async function sendAiImageGenerationRequest({ holderShape, userPrompt, reference
     references.push({ file: referenceFile, dataUrl: referenceDataUrl, savedReference })
   }
 
+    const providerLines = await aiImageProviderPromptLines()
   const prompt = buildAiImageGenerationPrompt({
     holderShape,
     userPrompt,
     references,
-    referenceAttached
+    referenceAttached,
+    providerLines
   })
   const content = [{ type: 'text', text: prompt }]
 

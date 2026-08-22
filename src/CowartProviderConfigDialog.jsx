@@ -142,8 +142,8 @@ export function CowartProviderConfigDialog({ profile, defaultProvider = 'custom'
         onSaved?.(result?.profile ?? null)
         onClose()
       }, 700)
-    } catch {
-      setMessage('保存失败')
+    } catch (error) {
+      setMessage(`保存失败：${error instanceof Error ? error.message : String(error)}`)
     } finally {
       setIsSaving(false)
     }
@@ -160,8 +160,8 @@ export function CowartProviderConfigDialog({ profile, defaultProvider = 'custom'
         onSaved?.(null)
         onClose()
       }, 700)
-    } catch {
-      setMessage('删除失败')
+    } catch (error) {
+      setMessage(`删除失败：${error instanceof Error ? error.message : String(error)}`)
       setIsDeleting(false)
     }
   }
