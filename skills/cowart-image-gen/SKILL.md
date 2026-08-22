@@ -74,6 +74,22 @@ meta flag. Support both shapes.
 
    All provider scripts print JSON containing `outputPath`. Use that exact local image path for insertion. Generation and editing are both supported: pass one or more `--reference <image-path>` arguments to perform image-to-image / reference-based generation on any provider script.
 
+   Lightweight reference images: large references (roughly >1.5 MB or longest side >1500 px) make the request body huge and can cause upload or request timeouts. Before passing such an image to `--reference`, create a temporary downscaled copy and pass that copy instead:
+
+   - Scale proportionally so the longest side is at most 1448 px; never crop, stretch, or alter content.
+   - Use high-quality resampling (Lanczos).
+   - Keep PNG (compression level 9) for annotation screenshots that contain text, arrows, or fine lines; for photographic references JPEG quality ~85 is also fine and much smaller.
+   - Never modify the original file; the lightweight copy is only the model reference. The final image inserted into the canvas still follows the target slot size and aspect ratio.
+   - If ffmpeg is not available, use the original reference as-is instead of failing.
+
+   Example (longest side capped at 1448 px, already-small images left untouched):
+
+   ```bash
+   ffmpeg -y -i "reference.png" \
+     -vf "scale='if(gte(iw/ih,1),min(1448,iw),-2)':'if(gte(iw/ih,1),-2,min(1448,ih))':flags=lanczos" \
+     -frames:v 1 -update 1 -compression_level 9 "reference-light.png"
+   ```
+
    The user can save multiple named provider profiles. When the preference contains a non-null `imageProfileId`, append `--profile <imageProfileId>` to the provider script so it uses that exact profile; `get_cowart_provider_config` returns the full profile list (names, ids, and masked settings) when you need to inspect them.
 
    Example provider commands:
