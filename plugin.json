@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "cowart-api",
-  "version": "0.1.26",
+  "version": "0.1.27",
   "description": "A native canvas powered by tldraw for visual thinking, image generation, and annotation-driven edits. Merged edition with DashScope, custom OpenAI-compatible API and local ComfyUI image providers. Based on Cowart by ZHONG XIN (zhongerxin/Cowart).",
   "author": {
     "name": "dyf1234567"

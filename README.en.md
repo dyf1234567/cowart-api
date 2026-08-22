@@ -129,7 +129,7 @@ Codex reads the notes and arrows in the screenshot, generates a clean revised im
 Cowart still defaults to the built-in OpenAI image generation in Codex. Open the top-left main menu and choose `模型选择`; by default it only lists `Codex 默认`. Click `添加画像…` to create any number of named provider profiles, each with any one type:
 
 - **Alibaba Qwen**: uses Alibaba DashScope / Qwen / Wan image models. Fill in `DASHSCOPE_API_KEY`, `DASHSCOPE_BASE_URL`, and the model name.
-- **Custom API**: any OpenAI-compatible image endpoint. Fill in the API key, base URL, and model name; text-to-image uses `/v1/images/generations`, and reference-image edits use `/v1/images/edits`.
+- **Custom API**: any OpenAI-compatible image endpoint. Fill in the API key, base URL, and model name; text-to-image uses `/v1/images/generations`, and reference-image edits use `/v1/images/edits`. If your endpoint does not expose the images routes (for example some Alibaba Cloud dedicated deployments of the Qwen-Image series), set the call mode to the Alibaba multimodal chat route (`/v1/chat/completions`) or keep auto-detect (tries images first, then falls back to chat).
 - **Local ComfyUI**: fill in the local server URL (default `http://127.0.0.1:8188`). Paste an API-format workflow JSON with the prompt injection node path (for example `6.inputs.text`), or only fill in a checkpoint name and let the built-in standard workflow run; with a reference image it automatically switches to image-to-image (LoadImage plus adjustable denoise).
 
 You can create multiple profiles of each type, for example several custom APIs or several ComfyUI instances. Saved profiles appear in the `模型选择` list; click `配置` to edit or delete one. Selecting a profile routes the current project's image generation through it.
@@ -177,7 +177,7 @@ Image provider environment variables (they override the canvas UI configuration)
 
 - `COWART_IMAGE_PROVIDER`: `dashscope` / `custom` / `comfyui`, forces a specific provider.
 - DashScope: `DASHSCOPE_API_KEY`, `DASHSCOPE_BASE_URL` (or `DASHSCOPE_WORKSPACE_ID` + `DASHSCOPE_REGION`), `COWART_DASHSCOPE_IMAGE_MODEL`, `COWART_DASHSCOPE_IMAGE_SIZE`.
-- Custom API: `COWART_CUSTOM_API_KEY`, `COWART_CUSTOM_BASE_URL`, `COWART_CUSTOM_API_MODEL`.
+- Custom API: `COWART_CUSTOM_API_KEY`, `COWART_CUSTOM_BASE_URL`, `COWART_CUSTOM_API_MODEL`, `COWART_CUSTOM_CALL_MODE` (`auto` / `images` / `chat`).
 - ComfyUI: `COMFYUI_SERVER_URL`, `COMFYUI_CHECKPOINT`, `COMFYUI_WORKFLOW_FILE`, `COWART_COMFYUI_TIMEOUT`.
 
 ## Developer

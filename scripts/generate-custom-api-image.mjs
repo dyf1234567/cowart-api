@@ -11,14 +11,18 @@ function printUsage() {
 Calls an OpenAI-compatible image API:
   - Without --reference: POST {baseUrl}/images/generations
   - With --reference:    POST {baseUrl}/images/edits (multipart)
+  - Chat-multimodal mode (Alibaba Qwen-Image style): POST {baseUrl}/chat/completions
+    with multimodal content, then downloads the returned image URL.
 
 Options:
   --profile <name|id>     Use a saved Cowart provider profile (custom type) instead of the default section.
+  --call-mode <mode>      auto | images | chat. Overrides the profile callMode.
 
 Environment:
   COWART_CUSTOM_API_KEY     Required (or configure it from the Cowart canvas UI).
   COWART_CUSTOM_BASE_URL    e.g. https://api.example.com/v1
-  COWART_CUSTOM_API_MODEL   Model name passed to the API.`);
+  COWART_CUSTOM_API_MODEL   Model name passed to the API.
+  COWART_CUSTOM_CALL_MODE   auto | images | chat`);
 }
 
 function parseArgs(argv) {
@@ -193,6 +197,49 @@ async function generateViaEdits({ baseUrl, apiKey, model, prompt, size, n, refer
   return JSON.parse(text);
 }
 
+// 阿里系多模态生图路由：POST {baseUrl}/chat/completions，content 为 [{text}, {image}] 数组。
+async function generateViaChatMultimodal({ baseUrl, apiKey, model, prompt, referencePath }) {
+  const content = [{ text: prompt }];
+  if (referencePath) {
+    const filePath = resolve(referencePath);
+    const buffer = await readFile(filePath);
+    const mimeType = REFERENCE_MIME_TYPES.get(extname(filePath).toLowerCase()) || "image/png";
+    content.push({ image: `data:${mimeType};base64,${buffer.toString("base64")}` });
+  }
+
+  const response = await fetch(`${baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({ model, messages: [{ role: "user", content }] }),
+  });
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(`Custom API /chat/completions failed: ${response.status} ${response.statusText}: ${text.slice(0, 1000)}`);
+  }
+  return JSON.parse(text);
+}
+
+// 兼容两种响应形态：OpenAI 格式 (choices 在顶层) 和 DashScope 原生格式 (包在 output 里)。
+function findImageInChatResponse(payload) {
+  const root = payload?.output ?? payload ?? {};
+  const message = root?.choices?.[0]?.message;
+  const items = Array.isArray(message?.content) ? message.content : [];
+  for (const item of items) {
+    if (item && typeof item === "object") {
+      if (nonEmptyString(item.image)) return { url: item.image, b64: null };
+      if (nonEmptyString(item.image_url?.url)) return { url: item.image_url.url, b64: null };
+    }
+  }
+  if (typeof message?.content === "string") {
+    const match = message.content.match(/https?:\/\/\S+?\.(?:png|jpe?g|webp)(?:\?\S*)?/i);
+    if (match) return { url: match[0], b64: null };
+  }
+  return null;
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help || args.h) {
@@ -231,20 +278,66 @@ async function main() {
   const outputPath = resolve(outDir, outputName);
 
   const request = { baseUrl, apiKey, model, prompt, size, n };
-  const payload = referencePaths.length > 0
-    ? await generateViaEdits({ ...request, referencePath: referencePaths[0] })
-    : await generateViaGenerations(request);
+  const hasReference = referencePaths.length > 0;
 
-  const image = findImageInResponse(payload);
-  if (!image) {
-    throw new Error(`Custom API response did not include an image: ${JSON.stringify(payload).slice(0, 1000)}`);
+  const callModeRaw = (
+    nonEmptyString(args["call-mode"]) ||
+    nonEmptyString(process.env.COWART_CUSTOM_CALL_MODE) ||
+    nonEmptyString(config.callMode) ||
+    "auto"
+  ).toLowerCase();
+  const callMode = ["auto", "images", "chat"].includes(callModeRaw) ? callModeRaw : "auto";
+
+  let image = null;
+  let usedMode = null;
+
+  if (callMode === "chat") {
+    const payload = await generateViaChatMultimodal({ ...request, referencePath: referencePaths[0] });
+    image = findImageInChatResponse(payload);
+    usedMode = "chat";
+    if (!image) {
+      throw new Error(`Custom API chat response did not include an image: ${JSON.stringify(payload).slice(0, 1000)}`);
+    }
+  } else {
+    const runImagesRoute = async () => {
+      const payload = hasReference
+        ? await generateViaEdits({ ...request, referencePath: referencePaths[0] })
+        : await generateViaGenerations(request);
+      const found = findImageInResponse(payload);
+      if (!found) {
+        throw new Error(`Custom API response did not include an image: ${JSON.stringify(payload).slice(0, 1000)}`);
+      }
+      return found;
+    };
+
+    if (callMode === "images") {
+      image = await runImagesRoute();
+      usedMode = hasReference ? "images-edits" : "images-generations";
+    } else {
+      try {
+        image = await runImagesRoute();
+        usedMode = hasReference ? "images-edits" : "images-generations";
+      } catch (imagesError) {
+        if (hasReference) throw imagesError;
+        console.error(
+          `Cowart custom API: images route failed (${imagesError instanceof Error ? imagesError.message : imagesError}). Trying the chat/completions multimodal route...`,
+        );
+        const payload = await generateViaChatMultimodal(request);
+        image = findImageInChatResponse(payload);
+        usedMode = "chat";
+        if (!image) {
+          throw new Error(`Custom API chat response did not include an image: ${JSON.stringify(payload).slice(0, 1000)}`);
+        }
+      }
+    }
   }
 
   await saveResultImage(image, outputPath);
 
   const result = {
     provider: "custom",
-    mode: referencePaths.length > 0 ? "img2img" : "txt2img",
+    callMode: usedMode,
+    mode: hasReference ? "img2img" : "txt2img",
     model,
     size: size ?? null,
     imagePath: image.url ?? null,

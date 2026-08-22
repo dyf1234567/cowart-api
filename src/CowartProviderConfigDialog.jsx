@@ -28,6 +28,7 @@ function defaultSettings(provider) {
     apiKey: '',
     baseUrl: '',
     model: provider === 'dashscope' ? 'wan2.7-image-pro' : '',
+    callMode: 'auto',
     configured: false,
     apiKeyPreview: ''
   }
@@ -95,7 +96,8 @@ export function CowartProviderConfigDialog({ profile, defaultProvider = 'custom'
       payload = {
         apiKey,
         baseUrl: settings.baseUrl,
-        model: settings.model || (provider === 'dashscope' ? 'wan2.7-image-pro' : '')
+        model: settings.model || (provider === 'dashscope' ? 'wan2.7-image-pro' : ''),
+        ...(provider === 'custom' ? { callMode: settings.callMode || 'auto' } : {})
       }
     } else if (provider === 'comfyui') {
       if (!settings.serverUrl.trim()) {
@@ -281,6 +283,24 @@ export function CowartProviderConfigDialog({ profile, defaultProvider = 'custom'
                 value={settings.model}
               />
             </label>
+
+            {provider === 'custom' && (
+              <label className="cowart-config-field">
+                <span>调用模式</span>
+                <select
+                  disabled={isSaving || isDeleting}
+                  onChange={(event) => updateSettings('callMode', event.target.value)}
+                  onClick={stopInputEvent}
+                  onKeyDown={stopInputEvent}
+                  onPointerDown={stopInputEvent}
+                  value={settings.callMode || 'auto'}
+                >
+                  <option value="auto">自动探测（先 images 接口，失败后试多模态 chat）</option>
+                  <option value="images">OpenAI images 接口（/images/generations）</option>
+                  <option value="chat">阿里多模态 chat 接口（/chat/completions）</option>
+                </select>
+              </label>
+            )}
           </>
         )}
 

@@ -836,7 +836,7 @@ export async function writeCowartModelPreferences(args = {}, preferences) {
 function defaultProviderConfig() {
   return {
     dashscope: { apiKey: "", baseUrl: "", model: DEFAULT_DASHSCOPE_MODEL },
-    custom: { apiKey: "", baseUrl: "", model: "" },
+    custom: { apiKey: "", baseUrl: "", model: "", callMode: "auto" },
     comfyui: {
       serverUrl: DEFAULT_COMFYUI_SERVER_URL,
       checkpoint: "",
@@ -935,6 +935,7 @@ export function publicProviderConfig(config) {
       ...maskApiKey(custom.apiKey),
       baseUrl: typeof custom.baseUrl === "string" ? custom.baseUrl : "",
       model: typeof custom.model === "string" ? custom.model : "",
+      callMode: COWART_CUSTOM_CALL_MODES.includes(custom.callMode) ? custom.callMode : "auto",
     },
     comfyui: {
       configured: Boolean(
@@ -988,6 +989,9 @@ export async function writeCowartProviderConfig(patch = {}) {
       next.custom.baseUrl = section.baseUrl.trim().replace(/\/+$/, "");
     }
     if (typeof section.model === "string") next.custom.model = section.model.trim();
+    if (typeof section.callMode === "string" && COWART_CUSTOM_CALL_MODES.includes(section.callMode.trim())) {
+      next.custom.callMode = section.callMode.trim();
+    }
   }
 
   if (patch.comfyui && typeof patch.comfyui === "object") {
@@ -1018,9 +1022,12 @@ export async function writeCowartProviderConfig(patch = {}) {
 
 export const COWART_PROFILE_PROVIDERS = ["dashscope", "custom", "comfyui"];
 
+// custom 画像的调用模式：OpenAI images 路由、阿里系多模态 chat/completions 生图路由，或自动回退。
+export const COWART_CUSTOM_CALL_MODES = ["auto", "images", "chat"];
+
 function profileSettingsDefaults(provider) {
   if (provider === "dashscope") return { apiKey: "", baseUrl: "", model: DEFAULT_DASHSCOPE_MODEL };
-  if (provider === "custom") return { apiKey: "", baseUrl: "", model: "" };
+  if (provider === "custom") return { apiKey: "", baseUrl: "", model: "", callMode: "auto" };
   if (provider === "comfyui") {
     return {
       serverUrl: DEFAULT_COMFYUI_SERVER_URL,
@@ -1058,7 +1065,10 @@ function normalizeProfileSettings(provider, settings = {}, existing = {}) {
   }
   if ("baseUrl" in next) next.baseUrl = next.baseUrl.trim().replace(/\/+$/, "");
   if (provider === "dashscope" && !next.model.trim()) next.model = DEFAULT_DASHSCOPE_MODEL;
-  if (provider === "custom") next.model = next.model.trim();
+  if (provider === "custom") {
+    next.model = next.model.trim();
+    if (!COWART_CUSTOM_CALL_MODES.includes(next.callMode)) next.callMode = "auto";
+  }
   if (provider === "comfyui") {
     next.serverUrl = next.serverUrl.trim().replace(/\/+$/, "") || DEFAULT_COMFYUI_SERVER_URL;
     if (typeof next.denoise === "number") next.denoise = Math.min(1, Math.max(0, next.denoise));
