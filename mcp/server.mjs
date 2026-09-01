@@ -33,6 +33,7 @@ import {
   saveCowartProfile,
   deleteCowartProfile,
   publicProfiles,
+  publicProviderConfig,
   writeCowartModelPreferences,
   writeCowartPageAsset,
   writeCowartProviderConfig,
@@ -1466,7 +1467,7 @@ function registerCowartStateTools(mcpServer) {
             text: `Loaded Cowart provider config from ${providerConfigFile}.`,
           },
         ],
-        structuredContent: { config, profiles: publicProfiles(profiles), path: providerConfigFile },
+        structuredContent: { config: publicProviderConfig(config), profiles: publicProfiles(profiles), path: providerConfigFile },
       };
     },
   );
