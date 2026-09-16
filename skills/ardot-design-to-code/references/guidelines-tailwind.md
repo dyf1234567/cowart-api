@@ -71,7 +71,7 @@ Your `globals.css` should follow this structure:
   .font-primary {
     font-family: "JetBrains Mono", monospace;
   }
-  
+
   .font-secondary {
     font-family: "Inter", sans-serif;
   }

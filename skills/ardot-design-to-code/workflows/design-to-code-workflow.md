@@ -146,7 +146,7 @@ Download returned URLs into <project>/assets/images.
 ```
 
 **Key rules:**
-- For SVG format there is no limit on the number of nodes per call. 
+- For SVG format there is no limit on the number of nodes per call.
 - For image formats (PNG/JPEG/WEBP), it is recommended to export no more than 5 nodes per batch, split into batches if exceeding
 - Only export nodes from the `image` list returned by `scan_exportable_resources`
 - **Do NOT export entire slide/page frames** — only export image nodes within them (backgrounds, scenes, etc.)
@@ -373,7 +373,7 @@ Design files use 0~1 float values for colors; these must be converted to CSS hex
 
 ```javascript
 function rgbToHex(r, g, b) {
-  return '#' + [r, g, b].map(v => 
+  return '#' + [r, g, b].map(v =>
     Math.round(v * 255).toString(16).padStart(2, '0')
   ).join('').toUpperCase();
 }

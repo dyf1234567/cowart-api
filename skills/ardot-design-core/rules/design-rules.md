@@ -2,7 +2,7 @@
 
 ---
 name: design-rules
-description: Single source of truth for ardot design editing — editing principles, coordinates, flexbox layout, text nodes, colors/fills, tables, images, effects, property quick reference, troubleshooting, post-generation validation pattern, and node property schema. 
+description: Single source of truth for ardot design editing — editing principles, coordinates, flexbox layout, text nodes, colors/fills, tables, images, effects, property quick reference, troubleshooting, post-generation validation pattern, and node property schema.
 metadata:
   tags: ardot, design, rules, flexbox, components, schema, validation
 ---
@@ -81,7 +81,7 @@ For repeating card layouts (product grids, feature cards, stat cards), use `layo
 // Grid container — wraps cards automatically
 grid = I(section, {
   type: "frame", name: "Product Grid",
-  layout: "wrap",     // ⭐ CRITICAL — enables auto-wrapping            
+  layout: "wrap",     // ⭐ CRITICAL — enables auto-wrapping
   width: "fill_container",
   height: "hug_contents",          // grows with content
   gap: 12,                         // horizontal gap between cards

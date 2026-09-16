@@ -123,7 +123,7 @@ item4=I("35:2", {type: "ref", ref: "366:12", libraryKey: "693499159567438", comp
 **Important:** use the property name which is defined in `componentPropertyDefinitions` to set new value.
 **Important:** use the property value which is provided in `variantOptions` to switch variant.
 
-already exist a componentSet nodes: `55:2`, has three Variant properties: 
+already exist a componentSet nodes: `55:2`, has three Variant properties:
 ``` json
 {"Type": {"type": "VARIANT","defaultValue": "Circle","variantOptions": ["Circle", "Rectangle"]},
 "Size": {"type": "VARIANT", "defaultValue": "small", "variantOptions": ["big", "small"]},
