@@ -1,6 +1,6 @@
 {
   "name": "cowart-api-canvas",
-  "version": "0.1.33",
+  "version": "0.1.33+codex.20260916161439",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,7 +12,8 @@
     "probe:mcp": "node ./scripts/probe-mcp.mjs",
     "probe:analytics": "node ./scripts/probe-analytics.mjs",
     "probe:ga4": "node ./scripts/probe-ga4.mjs",
-    "quality": "npm run check:plugin && npm run check && npm run build && npm run probe:mcp && npm run probe:analytics && npm run probe:ga4"
+    "probe:ardot": "node ./scripts/probe-ardot-profile.mjs",
+    "quality": "npm run check:plugin && npm run check && npm run build && npm run probe:mcp && npm run probe:ardot && npm run probe:analytics && npm run probe:ga4"
   },
   "dependencies": {
     "@modelcontextprotocol/ext-apps": "^1.7.4",

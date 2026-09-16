@@ -760,7 +760,7 @@ export async function writeCowartViewState(args = {}, viewState) {
 // project.
 // ---------------------------------------------------------------------------
 
-export const COWART_IMAGE_PROVIDERS = ["openai", "dashscope", "custom", "comfyui"];
+export const COWART_IMAGE_PROVIDERS = ["openai", "dashscope", "custom", "comfyui", "ardot"];
 
 const DEFAULT_DASHSCOPE_MODEL = "wan2.7-image-pro";
 const DEFAULT_COMFYUI_SERVER_URL = "http://127.0.0.1:8188";
@@ -1020,7 +1020,7 @@ export async function writeCowartProviderConfig(patch = {}) {
 // so scripts and older consumers keep working.
 // ---------------------------------------------------------------------------
 
-export const COWART_PROFILE_PROVIDERS = ["dashscope", "custom", "comfyui"];
+export const COWART_PROFILE_PROVIDERS = ["dashscope", "custom", "comfyui", "ardot"];
 
 // custom 画像的调用模式：OpenAI images 路由、阿里系多模态 chat/completions 生图路由，或自动回退。
 export const COWART_CUSTOM_CALL_MODES = ["auto", "images", "chat"];
@@ -1028,6 +1028,12 @@ export const COWART_CUSTOM_CALL_MODES = ["auto", "images", "chat"];
 function profileSettingsDefaults(provider) {
   if (provider === "dashscope") return { apiKey: "", baseUrl: "", model: DEFAULT_DASHSCOPE_MODEL };
   if (provider === "custom") return { apiKey: "", baseUrl: "", model: "", callMode: "auto" };
+  if (provider === "ardot") {
+    return {
+      serverUrl: "https://ardot.tencent.com/mcp",
+      exportFormat: "png",
+    };
+  }
   if (provider === "comfyui") {
     return {
       serverUrl: DEFAULT_COMFYUI_SERVER_URL,
@@ -1069,6 +1075,10 @@ function normalizeProfileSettings(provider, settings = {}, existing = {}) {
     next.model = next.model.trim();
     if (!COWART_CUSTOM_CALL_MODES.includes(next.callMode)) next.callMode = "auto";
   }
+  if (provider === "ardot") {
+    next.serverUrl = "https://ardot.tencent.com/mcp";
+    if (!['png', 'jpeg', 'webp'].includes(next.exportFormat)) next.exportFormat = "png";
+  }
   if (provider === "comfyui") {
     next.serverUrl = next.serverUrl.trim().replace(/\/+$/, "") || DEFAULT_COMFYUI_SERVER_URL;
     if (typeof next.denoise === "number") next.denoise = Math.min(1, Math.max(0, next.denoise));
@@ -1087,6 +1097,14 @@ function normalizeStoredProfile(raw) {
 
 function publicProfileSettings(profile) {
   const { provider, settings } = profile;
+  if (provider === "ardot") {
+    return {
+      configured: true,
+      serverUrl: settings.serverUrl,
+      exportFormat: settings.exportFormat,
+      authentication: "oauth",
+    };
+  }
   if (provider === "comfyui") {
     return {
       configured: Boolean(
@@ -1174,7 +1192,7 @@ export async function saveCowartProfile(profile = {}) {
   const provider = COWART_PROFILE_PROVIDERS.includes(profile.provider) ? profile.provider : null;
   const name = nonEmptyString(profile.name);
   if (!provider) {
-    throw new Error("Expected profile.provider to be dashscope, custom or comfyui.");
+    throw new Error("Expected profile.provider to be dashscope, custom, comfyui or ardot.");
   }
   if (!name) throw new Error("Expected profile.name to be a non-empty string.");
 

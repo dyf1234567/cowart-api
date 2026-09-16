@@ -2587,6 +2587,14 @@ async function aiImageProviderPromptLines() {
         candidates[0] ??
         null
     }
+    if (profile?.provider === 'ardot') {
+      const exportFormat = profile.settings?.exportFormat || 'png'
+      return [
+        `画布当前选择的图片提供方是腾讯设计 Ardot（画像名称：${profile.name}，画像 id：${profile.id}）。`,
+        `请使用 cowart-ardot-poster 技能和 ardot-remote MCP 创建可编辑海报，导出 ${exportFormat.toUpperCase()}，再用 Cowart 的 insert_cowart_image 放回当前画布。`,
+        '不要改用 Codex 默认图片生成、DashScope、自定义 API 或 ComfyUI；如果 Ardot OAuth 未完成或工具不可用，请明确提示完成授权，不要静默回退。'
+      ]
+    }
     const script = profile && PROFILE_PROVIDER_SCRIPTS[profile.provider]
     if (!profile || !script) return DEFAULT_IMAGE_PROVIDER_PROMPT_LINES
 

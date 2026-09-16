@@ -1377,7 +1377,7 @@ function registerCowartStateTools(mcpServer) {
     {
       title: "Get Cowart Model Preferences",
       description:
-        "Read the Cowart image provider preference (openai, dashscope, custom, or comfyui) saved in canvas/cowart-model-preferences.json. Skills use this to choose the image generation provider.",
+        "Read the Cowart image provider preference (openai, dashscope, custom, comfyui, or ardot) saved in canvas/cowart-model-preferences.json. Skills use this to choose the image generation provider.",
       inputSchema: {
         ...projectArgsSchema,
       },
@@ -1445,7 +1445,7 @@ function registerCowartStateTools(mcpServer) {
     {
       title: "Get Cowart Provider Config",
       description:
-        "Read the machine-local Cowart image provider configuration (DashScope, custom OpenAI-compatible API, local ComfyUI). API keys are masked; the raw keys never leave the local config file. Skills can call this to decide how to run provider generation scripts.",
+        "Read the machine-local Cowart image provider configuration (DashScope, custom OpenAI-compatible API, local ComfyUI, or Tencent Design Ardot OAuth MCP). API keys are masked; the raw keys never leave the local config file. Skills can call this to choose the correct provider workflow.",
       inputSchema: {
         ...projectArgsSchema,
       },
@@ -1514,7 +1514,7 @@ function registerCowartStateTools(mcpServer) {
     {
       title: "Save Cowart Provider Profile",
       description:
-        "Create or update a named Cowart image provider profile (dashscope, custom, or comfyui). Provide an existing profile.id to update; omit it to create a new profile. Empty apiKey values keep the previously stored key. Returns the saved profile with its API key masked.",
+        "Create or update a named Cowart image provider profile (dashscope, custom, comfyui, or ardot). Provide an existing profile.id to update; omit it to create a new profile. Empty apiKey values keep the previously stored key. Ardot uses host-managed OAuth and stores no token here. Returns the saved public profile.",
       inputSchema: {
         ...projectArgsSchema,
         profile: z.any(),

@@ -5,7 +5,8 @@ import { deleteCowartProfile, hasCowartWidgetBridge, saveCowartProfile } from '.
 export const PROFILE_TYPE_OPTIONS = [
   { id: 'custom', label: '自定义 API（OpenAI 兼容）' },
   { id: 'dashscope', label: '阿里千问（DashScope）' },
-  { id: 'comfyui', label: '本地 ComfyUI' }
+  { id: 'comfyui', label: '本地 ComfyUI' },
+  { id: 'ardot', label: '腾讯设计 Ardot（OAuth MCP）' }
 ]
 
 export function profileTypeLabel(provider) {
@@ -13,6 +14,14 @@ export function profileTypeLabel(provider) {
 }
 
 function defaultSettings(provider) {
+  if (provider === 'ardot') {
+    return {
+      serverUrl: 'https://ardot.tencent.com/mcp',
+      exportFormat: 'png',
+      configured: true,
+      authentication: 'oauth'
+    }
+  }
   if (provider === 'comfyui') {
     return {
       serverUrl: 'http://127.0.0.1:8188',
@@ -127,6 +136,13 @@ export function CowartProviderConfigDialog({ profile, defaultProvider = 'custom'
         imageNodePath: settings.imageNodePath,
         denoise: Number.isFinite(denoise) ? denoise : 0.75
       }
+    } else if (provider === 'ardot') {
+      payload = {
+        serverUrl: 'https://ardot.tencent.com/mcp',
+        exportFormat: ['png', 'jpeg', 'webp'].includes(settings.exportFormat)
+          ? settings.exportFormat
+          : 'png'
+      }
     }
 
     if (!payload) {
@@ -237,7 +253,13 @@ export function CowartProviderConfigDialog({ profile, defaultProvider = 'custom'
             onClick={stopInputEvent}
             onKeyDown={stopInputEvent}
             onPointerDown={stopInputEvent}
-            placeholder={provider === 'comfyui' ? '本地 ComfyUI' : '我的自定义 API'}
+            placeholder={
+              provider === 'comfyui'
+                ? '本地 ComfyUI'
+                : provider === 'ardot'
+                  ? '腾讯设计 Ardot'
+                  : '我的自定义 API'
+            }
             value={name}
           />
         </label>
@@ -425,6 +447,42 @@ export function CowartProviderConfigDialog({ profile, defaultProvider = 'custom'
                 value={settings.denoise}
               />
             </label>
+          </>
+        )}
+
+        {provider === 'ardot' && (
+          <>
+            <label className="cowart-config-field">
+              <span>Ardot Remote MCP</span>
+              <input
+                disabled
+                readOnly
+                value="https://ardot.tencent.com/mcp"
+              />
+            </label>
+
+            <label className="cowart-config-field">
+              <span>导出格式</span>
+              <select
+                disabled={isSaving || isDeleting}
+                onChange={(event) => updateSettings('exportFormat', event.target.value)}
+                onClick={stopInputEvent}
+                onKeyDown={stopInputEvent}
+                onPointerDown={stopInputEvent}
+                value={settings.exportFormat || 'png'}
+              >
+                <option value="png">PNG</option>
+                <option value="jpeg">JPEG</option>
+                <option value="webp">WEBP</option>
+              </select>
+            </label>
+
+            <div className="cowart-config-field">
+              <span>认证方式</span>
+              <p className="cowart-config-message">
+                使用 Ardot 官方 OAuth（mcp:use）。首次启用后请在 Codex 的 MCP 连接界面完成腾讯账号授权；Cowart 不保存账号密码或访问令牌。
+              </p>
+            </div>
           </>
         )}
 

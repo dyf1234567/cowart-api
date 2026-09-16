@@ -1,0 +1,8 @@
+interface:
+  display_name: "Cowart Ardot Poster"
+  short_description: "Create an editable Ardot poster and insert its export into Cowart"
+  default_prompt: "Use $cowart:cowart-ardot-poster to create an editable poster with Tencent Design Ardot, export it, and insert it into the Cowart canvas."
+
+policy:
+  allow_implicit_invocation: true
+

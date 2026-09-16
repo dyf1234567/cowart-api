@@ -8,6 +8,11 @@
         "./scripts/start-mcp.mjs"
       ],
       "cwd": "."
+    },
+    "ardot-remote": {
+      "title": "Tencent Design Ardot Remote MCP",
+      "description": "Create editable poster designs in Ardot, validate them, and export bitmap assets for insertion into Cowart.",
+      "url": "https://ardot.tencent.com/mcp"
     }
   }
 }

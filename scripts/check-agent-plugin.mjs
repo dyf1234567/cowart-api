@@ -71,11 +71,11 @@ for (const [name, server] of Object.entries(mcpConfig.mcpServers)) {
 }
 
 const resolvedRoot = await realpath(rootDir);
-for (const skillName of ["cowart-image-edit", "cowart-image-gen", "cowart-open-canvas"]) {
+for (const skillName of ["cowart-image-edit", "cowart-image-gen", "cowart-open-canvas", "cowart-ardot-poster", "ardot-design-core", "ardot-design-router", "ardot-design-to-code", "ardot-poster", "ardot-slides", "ardot-ui-design"]) {
   const skillPath = path.join(rootDir, "skills", skillName, "SKILL.md");
   assert.ok((await lstat(skillPath)).isFile(), `${skillPath} must be a regular file`);
   assert.ok((await realpath(skillPath)).startsWith(`${resolvedRoot}${path.sep}`));
-  const contents = await readFile(skillPath, "utf8");
+  const contents = (await readFile(skillPath, "utf8")).replace(/\r\n/g, "\n");
   const frontmatter = contents.match(/^---\n([\s\S]*?)\n---/u)?.[1];
   assert.ok(frontmatter, `${skillName} must contain YAML frontmatter`);
   assert.equal(frontmatter.match(/^name:\s*(.+)$/mu)?.[1], skillName);

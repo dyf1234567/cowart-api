@@ -71,8 +71,9 @@ meta flag. Support both shapes.
    - `dashscope` (Alibaba Qwen/Wan): run `scripts/generate-dashscope-image.mjs` from the Cowart plugin directory.
    - `custom` (OpenAI-compatible API): run `scripts/generate-custom-api-image.mjs`.
    - `comfyui` (local ComfyUI): run `scripts/generate-comfyui-image.mjs`.
+   - `ardot` (Tencent Design Ardot): switch to the `cowart-ardot-poster` skill. Use the OAuth-protected `ardot-remote` MCP to build an editable poster, verify it, export it, and insert the exact export into Cowart. Ardot is not a provider script and must never be called as an OpenAI-compatible REST API.
 
-   All provider scripts print JSON containing `outputPath`. Use that exact local image path for insertion. Generation and editing are both supported: pass one or more `--reference <image-path>` arguments to perform image-to-image / reference-based generation on any provider script.
+   The DashScope, custom, and ComfyUI provider scripts print JSON containing `outputPath`. Use that exact local image path for insertion. Generation and editing are both supported: pass one or more `--reference <image-path>` arguments to perform image-to-image / reference-based generation on any provider script. Ardot instead returns its export through the live `export_nodes` MCP result; follow the `cowart-ardot-poster` workflow and use that exact export.
 
    Lightweight reference images: large references (roughly >1.5 MB or longest side >1500 px) make the request body huge and can cause upload or request timeouts. Before passing such an image to `--reference`, create a temporary downscaled copy and pass that copy instead:
 
@@ -112,7 +113,7 @@ meta flag. Support both shapes.
    Credentials are stored machine-locally outside the project (the user's Cowart config directory) and can be edited from the canvas main menu (`模型选择` → `配置`). The scripts read that config automatically; environment variables still override the UI config when both are present:
 
    ```text
-   COWART_IMAGE_PROVIDER=dashscope|custom|comfyui
+   COWART_IMAGE_PROVIDER=dashscope|custom|comfyui|ardot
    DASHSCOPE_API_KEY=...   DASHSCOPE_BASE_URL=...   COWART_DASHSCOPE_IMAGE_MODEL=wan2.7-image-pro
    COWART_CUSTOM_API_KEY=...   COWART_CUSTOM_BASE_URL=...   COWART_CUSTOM_API_MODEL=...
    COMFYUI_SERVER_URL=http://127.0.0.1:8188   COMFYUI_CHECKPOINT=...

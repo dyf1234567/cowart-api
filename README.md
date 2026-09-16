@@ -124,13 +124,14 @@ Codex 会读取截图里的标注和箭头，生成去掉标注痕迹的新图�
 
 ![演示和切换 Cowart AI Slides](assets/view-slides.png)
 
-### 选择图片模型：多画像（阿里千问 / 自定义 API / 本地 ComfyUI）
+### 选择图片模型：多画像（阿里千问 / 自定义 API / 本地 ComfyUI / 腾讯设计 Ardot）
 
 Cowart 默认仍使用 Codex 内置的 OpenAI 图片生成能力。打开左上角主菜单，选择 `模型选择`，默认只列出 `Codex 默认`。点击 `添加画像…`，可以创建任意多个具名提供方画像，每个画像任选一种类型：
 
 - **阿里千问**：走阿里 DashScope / 千问 / 万相图片模型，填写 `DASHSCOPE_API_KEY`、`DASHSCOPE_BASE_URL` 和模型名。
 - **自定义 API**：任何 OpenAI 兼容的图片接口，填写 API Key、Base URL 和模型名；文生图走 `/v1/images/generations`，带参考图时走 `/v1/images/edits`。若你的端点不提供 images 路由（如部分阿里云独享部署的 Qwen-Image 系列），把“调用模式”切为“阿里多模态 chat 接口”（走 `/v1/chat/completions`）或保持“自动探测”（images 失败后自动试 chat）。
 - **本地 ComfyUI**：填写本地服务地址（默认 `http://127.0.0.1:8188`）。可以粘贴 API 格式的 Workflow JSON 并指定提示词注入节点路径（如 `6.inputs.text`），也可以只填 Checkpoint 名，由内置标准工作流生成；带参考图时自动走图生图（LoadImage + 可调重绘幅度）。
+- **腾讯设计 Ardot**：通过插件内置的 `ardot-remote` OAuth MCP 创建可编辑海报，按海报规范完成排版，截图校验后导出 PNG/JPEG/WEBP，再把导出图插入 Cowart。首次使用需要在 Codex MCP 连接中完成腾讯账号 OAuth（`mcp:use`）。
 
 每种类型都可以建多个画像，例如同时保存多个自定义 API 或多个 ComfyUI 实例；已保存的画像会出现在 `模型选择` 列表里，点 `配置` 可编辑或删除。选中某个画像后，当前项目的图片生成就走该画像。
 
@@ -151,6 +152,7 @@ node scripts/generate-comfyui-image.mjs --prompt "..." --width 1024 --height 102
 - `cowart:cowart-open-canvas`：打开 Cowart 原生画布 widget。
 - `cowart:cowart-image-gen`：接收画布内 prompt 和参考图，用生成图片替换选中的 `AI 图片` 框；没有选中框时也可以把生成图插入当前页面。
 - `cowart:cowart-image-edit`：根据画布提交或用户提供的 Cowart 标注截图生成修订图。
+- `cowart:cowart-ardot-poster`：在腾讯设计 Ardot 中生成可编辑海报、导出并插入 Cowart。
 
 ## 本地开发
 
@@ -175,10 +177,12 @@ npm run build
 
 图片提供方环境变量（优先级高于画布 UI 配置）：
 
-- `COWART_IMAGE_PROVIDER`：`dashscope` / `custom` / `comfyui`，强制使用指定提供方。
+- `COWART_IMAGE_PROVIDER`：`dashscope` / `custom` / `comfyui` / `ardot`，强制使用指定提供方。
 - DashScope：`DASHSCOPE_API_KEY`、`DASHSCOPE_BASE_URL`（或 `DASHSCOPE_WORKSPACE_ID` + `DASHSCOPE_REGION`）、`COWART_DASHSCOPE_IMAGE_MODEL`、`COWART_DASHSCOPE_IMAGE_SIZE`。
 - 自定义 API：`COWART_CUSTOM_API_KEY`、`COWART_CUSTOM_BASE_URL`、`COWART_CUSTOM_API_MODEL`、`COWART_CUSTOM_CALL_MODE`（`auto` / `images` / `chat`）。
 - ComfyUI：`COMFYUI_SERVER_URL`、`COMFYUI_CHECKPOINT`、`COMFYUI_WORKFLOW_FILE`、`COWART_COMFYUI_TIMEOUT`。
+
+Ardot 接入不使用 API Key。插件会通过 `ardot-remote`（`https://ardot.tencent.com/mcp`）走 Codex 托管的 OAuth；访问令牌不写入 Cowart 配置文件。
 
 ## 开发者
 
