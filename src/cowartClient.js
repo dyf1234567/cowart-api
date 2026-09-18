@@ -21,14 +21,6 @@ const TOOL_SAVE_PROVIDER_CONFIG = 'save_cowart_provider_config'
 const TOOL_SAVE_PROFILE = 'save_cowart_provider_profile'
 const TOOL_DELETE_PROFILE = 'delete_cowart_provider_profile'
 const WIDGET_PAYLOAD_TIMEOUT_MS = 5000
-// Codex 宿主代理可能拒绝 widget 发起的部分写调用（-32000），
-// 此时回退到本地 Cowart 开发服务的 HTTP 接口（vite 默认 43217，被占用时递增）。
-const HTTP_FALLBACK_BASES = [
-  'http://127.0.0.1:43217',
-  'http://127.0.0.1:43218',
-  'http://127.0.0.1:43219'
-]
-let resolvedHttpFallbackBase = null
 
 globalThis.__COWART_WIDGET_FETCH_GUARD__ = true
 
@@ -118,28 +110,19 @@ async function callCowartServerTool(name, args = {}, options = {}) {
 }
 
 async function fetchJson(url, options = {}) {
-  const response = await window.fetch(url, options)
+  const headers = new Headers(options.headers)
+  const token = document.querySelector('meta[name="cowart-session"]')?.content
+  if (token) headers.set('x-cowart-session', token)
+  const response = await window.fetch(url, { ...options, headers })
   if (!response.ok) {
     throw new Error(`Cowart request failed: ${response.status} - ${response.statusText}`)
   }
   return response.json()
 }
 
-// widget 桥调用失败后，依次尝试本地开发服务端口；全部失败则抛出原始桥错误。
-async function httpFallback(requestFactory, bridgeError) {
-  const bases = resolvedHttpFallbackBase
-    ? [resolvedHttpFallbackBase]
-    : HTTP_FALLBACK_BASES
-  for (const base of bases) {
-    try {
-      const result = await requestFactory(base)
-      resolvedHttpFallbackBase = base
-      return result
-    } catch {
-      /* 尝试下一个端口 */
-    }
-  }
-  throw bridgeError
+// Fail closed: an HTTP port is not proof of project identity or authorization.
+async function httpFallback(_requestFactory, bridgeError) {
+  throw new Error(`Cowart MCP 调用失败；为避免写错项目，已禁用跨端口回退。${bridgeError.message}`, { cause: bridgeError })
 }
 
 export async function loadCowartCanvasState(signal) {
@@ -150,6 +133,8 @@ export async function loadCowartCanvasState(signal) {
       { signal }
     )
     return {
+      projectDir: state.projectDir,
+      canvasDir: state.canvasDir,
       snapshot: state.snapshot,
       viewState: state.viewState ?? null,
       storage: state.storage,
@@ -162,6 +147,8 @@ export async function loadCowartCanvasState(signal) {
     fetchJson(VIEW_STATE_ENDPOINT, { signal })
   ])
   return {
+    projectDir: canvasData.projectDir,
+    canvasDir: canvasData.canvasDir,
     snapshot: canvasData.snapshot,
     viewState: viewStateData.viewState ?? null,
     storage: canvasData.storage,
@@ -206,7 +193,7 @@ export async function saveCowartCanvasSnapshot(snapshot, options = {}) {
   return fetchJson(CANVAS_ENDPOINT, {
     method: 'PUT',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(snapshot)
+    body: JSON.stringify({ snapshot, protectImageRecords: true, acknowledgedImageShapeDeletes: options.acknowledgedImageShapeDeletes ?? [] })
   })
 }
 
@@ -258,7 +245,9 @@ export async function saveCowartViewState(viewState) {
 
 export async function saveCowartReferenceImage(reference) {
   if (!hasCowartWidgetBridge()) {
-    throw new Error('当前 Cowart 画布没有可用的 Codex MCP 文件保存桥。')
+    return fetchJson('/api/reference-image', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(reference)
+    })
   }
 
   return callCowartServerTool(TOOL_SAVE_REFERENCE_IMAGE, reference)

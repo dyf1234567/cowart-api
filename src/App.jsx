@@ -94,6 +94,10 @@ import {
   sanitizeCanvasSnapshotForTldraw
 } from './canvasSnapshot.js'
 import { CowartMainMenu } from './CowartModelProviderMenu.jsx'
+import { resolveImageProfile, ardotSource, ardotEditInstructions, ardotCreationInstructions, ardotAssetInstructions } from './ardotRouting.js'
+import { requestCanvasInput } from './manualHandoff.js'
+import { submitLocalCanvasTask } from './localTasks.js'
+import LocalTaskPanel from './LocalTaskPanel.jsx'
 
 const SELECTION_STATE_ELEMENT_ID = 'cowart-selection-state'
 const PAGE_ASSETS_ROUTE = '/page-assets/'
@@ -148,12 +152,13 @@ const ANNOTATION_MAX_BEND = 48
 const ANNOTATION_LABEL_POSITION = 0
 const ANNOTATION_SELECT_TEXT_MAX_ATTEMPTS = 8
 const ANNOTATION_SELECT_TEXT_SETTLE_ATTEMPTS = 4
-const ANNOTATION_EDIT_TOOL_LABEL = '按标注修改'
+const ANNOTATION_EDIT_TOOL_LABEL = '图片标注编辑'
 const ANNOTATION_HTML_TOOL_LABEL = '按标注生成 Html'
 const ANNOTATION_EDIT_PROMPT = [
   '[@cowart](plugin://cowart@personal) 按标注修改',
   '',
   '请根据这张 Cowart 截图里的标注修改当前选中的图片：',
+  '- 编辑模式：bitmap-edit。使用 cowart-image-edit；仅重绘位图，不修改 Ardot 文件，不使用 Ardot 设计技能。',
   '- 截图包含当前图片，以及连到图片里或图片附近的标注箭头和标注文字。',
   '- 请把标注文字当作修改要求，生成一张新的干净图片。',
   '- 不要把标注箭头、标注文字、蓝色选框或工具栏带进最终图片。',
@@ -1280,7 +1285,9 @@ function followUpSender() {
   } else if (typeof window.openai?.sendFollowUpMessage === 'function') {
     sendMessage = (message) => window.openai.sendFollowUpMessage(message)
   }
-  if (!sendMessage) return null
+  if (!sendMessage) return IS_COWART_WIDGET_BUILD
+    ? async () => { throw new Error('内嵌画布消息桥不可用，请重新打开画布；不会自动转交独立网页。') }
+    : submitLocalCanvasTask
 
   return (message, analyticsContext = {}) =>
     sendTrackedWidgetMessage(sendMessage, message, analyticsContext)
@@ -1303,12 +1310,22 @@ function supportsCowartMessageImages() {
   return Boolean(cowartHostCapabilities()?.message?.image)
 }
 
-async function sendAnnotationEditRequest(editor, imageShapeId) {
-  const shapeIds = collectAnnotationEditShapeIds(editor, imageShapeId)
+async function sendAnnotationEditRequest(editor, imageShapeId, mode = 'bitmap-edit', brief = '') {
+  const source = ardotSource(editor.getShape(imageShapeId)?.meta)
+  const modeLines = mode === 'image-to-poster'
+    ? ['任务模式：image-to-ardot-poster。使用 cowart-ardot-poster，将所选图片作为素材上传 Ardot，创建新的可编辑海报。',
+      '不是图片标注编辑，也不是修改图片已有的 Ardot 来源。保留所选图片不动；海报文字、标题和布局使用 Ardot 可编辑图层。',
+      `Cowart source image shape: ${imageShapeId}`,
+      '完成后导出新海报，insert_cowart_image 放到源图右侧，matchAnchor:false，replaceAiImageHolder:false，设置 shapeMeta.cowartArdotSource={fileUrl:<真实文件URL>,nodeId:<真实海报节点ID>}。',
+      `海报要求：${brief}`, ...await currentArdotAssetInstructions()]
+    : mode === 'ardot-edit'
+    ? [...ardotEditInstructions(source, imageShapeId), ...await currentArdotAssetInstructions()]
+    : await aiImageProviderPromptLines('bitmap-edit')
+  const shapeIds = mode === 'image-to-poster' ? [imageShapeId] : collectAnnotationEditShapeIds(editor, imageShapeId)
   const rawBounds = editor.getShapesPageBounds(shapeIds)
   if (!rawBounds) throw new Error('无法计算截图范围。')
 
-  const exportBounds = expandBox(rawBounds, ANNOTATION_EDIT_EXPORT_PADDING)
+  const exportBounds = mode === 'image-to-poster' ? rawBounds : expandBox(rawBounds, ANNOTATION_EDIT_EXPORT_PADDING)
   const exportResult = await editor.toImageDataUrl(shapeIds, {
     bounds: exportBounds,
     background: true,
@@ -1323,13 +1340,18 @@ async function sendAnnotationEditRequest(editor, imageShapeId) {
     dataUrl: exportResult.url,
     mimeType: 'image/png'
   })
-  const prompt = buildAnnotationEditPrompt({
+  const screenshotPrompt = buildAnnotationEditPrompt({
     imageShapeId,
     shapeIds,
     exportWidth: exportResult.width,
     exportHeight: exportResult.height,
     screenshotAsset
   })
+  const prompt = mode === 'image-to-poster'
+    ? [...modeLines, `Clean source image local path: ${screenshotAsset.assetPath}`].join('\n')
+    : mode === 'ardot-edit'
+    ? [...modeLines, `Annotation screenshot local path: ${screenshotAsset.assetPath}`, '按截图标注修改上述源设计。'].join('\n')
+    : [screenshotPrompt, ...modeLines].join('\n')
   const sender = followUpSender()
   if (!sender) {
     throw new Error('当前 Cowart 画布没有可用的 Codex MCP 消息桥。')
@@ -1351,7 +1373,7 @@ async function sendAnnotationEditRequest(editor, imageShapeId) {
 
   return sender(
     { prompt, content },
-    { promptType: 'annotation_edit', hasReference: true }
+    { promptType: mode === 'bitmap-edit' ? 'annotation_edit' : mode, hasReference: true }
   )
 }
 
@@ -1757,7 +1779,26 @@ async function renderCowartHtmlDraftCanvas(shape, pixelRatio) {
     throw new Error('请选择一个已生成 HTML 的 AI HTML。')
   }
 
-  const iframeDocument = await waitForHtmlDraftDocument(shape.id)
+  // Capture static markup in a script-disabled same-origin frame. Live previews
+  // use an opaque origin and must never gain access to the task capability.
+  const captureFrame = document.createElement('iframe')
+  captureFrame.setAttribute('sandbox', 'allow-same-origin')
+  captureFrame.style.cssText = `position:fixed;left:-100000px;top:0;width:${shape.props.w}px;height:${shape.props.h}px;border:0`
+  let captureTimer
+  try {
+    const htmlSource = await readCowartHtmlDraftContent(shape)
+    const loaded = new Promise((resolve, reject) => {
+      captureTimer = setTimeout(() => reject(new Error('HTML 静态截图加载超时。')), 10000)
+      captureFrame.onload = () => { clearTimeout(captureTimer); resolve() }
+    })
+    captureFrame.srcdoc = htmlSource
+    document.body.append(captureFrame)
+    await loaded
+    return await captureCowartHtmlDocument(captureFrame.contentDocument, shape, pixelRatio)
+  } finally { clearTimeout(captureTimer); captureFrame.remove() }
+}
+
+async function captureCowartHtmlDocument(iframeDocument, shape, pixelRatio) {
   await waitForHtmlDraftCaptureReady(iframeDocument)
 
   const width = Math.max(1, Number(shape.props.w) || AI_IMAGE_HOLDER_DEFAULT_W)
@@ -2568,35 +2609,38 @@ const PROFILE_PROVIDER_SCRIPTS = {
   comfyui: 'scripts/generate-comfyui-image.mjs'
 }
 
-// 根据画布当前选择的图片画像生成提示词指令；未选择画像或读取失败时保持默认的 Codex 生图能力。
-async function aiImageProviderPromptLines() {
+async function selectedArdotProvider() {
+  const [preferences, profiles] = await Promise.all([loadCowartModelPreferences(), loadCowartProfiles()])
+  const profile = resolveImageProfile(preferences, profiles)
+  return profile?.provider === 'ardot' ? ardotAssetInstructions(profile, profiles) : null
+}
+
+async function currentArdotAssetInstructions() {
+  const [preferences, profiles] = await Promise.all([loadCowartModelPreferences(), loadCowartProfiles()])
+  return ardotAssetInstructions(resolveImageProfile(preferences, profiles), profiles)
+}
+
+// Provider selection is explicit. Configuration failures must not change providers.
+async function aiImageProviderPromptLines(mode = 'create') {
   try {
     const [preferences, profiles] = await Promise.all([
       loadCowartModelPreferences(),
       loadCowartProfiles()
     ])
-    const profileId = preferences?.imageProfileId
-    const provider = preferences?.imageProvider
-    if (!provider || provider === 'openai') return DEFAULT_IMAGE_PROVIDER_PROMPT_LINES
-    // 旧版偏好没有 imageProfileId 时，退回按提供方（和模型名）匹配画像。
-    let profile = profileId ? profiles.find((item) => item.id === profileId) : null
-    if (!profile) {
-      const candidates = profiles.filter((item) => item.provider === provider)
-      profile =
-        candidates.find((item) => preferences?.imageModel && item.settings?.model === preferences.imageModel) ??
-        candidates[0] ??
-        null
-    }
+    const profile = resolveImageProfile(preferences, profiles)
+    if (!profile) return DEFAULT_IMAGE_PROVIDER_PROMPT_LINES
     if (profile?.provider === 'ardot') {
+      if (mode === 'bitmap-edit') throw new Error('图片标注编辑需要位图服务；请在图片配置中选择 Codex、DashScope、自定义 API 或 ComfyUI。编辑 Ardot 图层请点“Ardot 源文件编辑”。')
       const exportFormat = profile.settings?.exportFormat || 'png'
       return [
         `画布当前选择的图片提供方是腾讯设计 Ardot（画像名称：${profile.name}，画像 id：${profile.id}）。`,
-        `请使用 cowart-ardot-poster 技能和 ardot-remote MCP 创建可编辑海报，导出 ${exportFormat.toUpperCase()}，再用 Cowart 的 insert_cowart_image 放回当前画布。`,
-        '不要改用 Codex 默认图片生成、DashScope、自定义 API 或 ComfyUI；如果 Ardot OAuth 未完成或工具不可用，请明确提示完成授权，不要静默回退。'
+        `使用 ardot-design-router 根据需求选择设计技能；海报使用 cowart-ardot-poster。导出 ${exportFormat.toUpperCase()}，用 insert_cowart_image 放回当前画布，并设置 shapeMeta.cowartArdotSource={fileUrl:<实际文件URL>,nodeId:<实际导出节点ID>}。`,
+        '设计排版必须使用 Ardot。OAuth 未完成或工具不可用时提示授权，不用位图生图代替设计。素材可由下面明确配置的服务生成。',
+        ...ardotAssetInstructions(profile, profiles)
       ]
     }
     const script = profile && PROFILE_PROVIDER_SCRIPTS[profile.provider]
-    if (!profile || !script) return DEFAULT_IMAGE_PROVIDER_PROMPT_LINES
+    if (!script) throw new Error(`不支持的图片提供方：${profile.provider}`)
 
     const lines = [
       `画布当前选择的图片提供方是 ${profile.provider}（画像名称：${profile.name}，画像 id：${profile.id}）。`
@@ -2605,12 +2649,11 @@ async function aiImageProviderPromptLines() {
       lines.push(`该画像配置的模型是 ${profile.settings.model}。`)
     }
     lines.push(
-      `请按照 cowart-image-gen 技能说明运行 Cowart 插件目录里的 ${script}，并追加 --profile "${profile.id}" 使用该画像；不要改用 Codex 默认的图片生成能力，也不要在该脚本失败时悄悄回退到其它提供方。`
+      `请按照 ${mode === 'bitmap-edit' ? 'cowart-image-edit' : 'cowart-image-gen'} 技能运行 Cowart 插件目录里的 ${script}，追加 --profile "${profile.id}"；标注编辑需传入源图参考。不要静默切换提供方。`
     )
     return lines
   } catch (error) {
-    console.warn('Cowart image provider preference could not be read; falling back to the default image provider.', error)
-    return DEFAULT_IMAGE_PROVIDER_PROMPT_LINES
+    throw new Error(`无法准备图片服务：${error.message}`, { cause: error })
   }
 }
 
@@ -2633,9 +2676,10 @@ function buildAiImageGenerationPrompt({ holderShape, userPrompt, references, ref
   ].join('\n')
 }
 
-function buildAiDraftGenerationPrompt({ holderShape, userPrompt, references, referenceAttached }) {
+function buildAiDraftGenerationPrompt({ holderShape, userPrompt, references, referenceAttached, ardot = false }) {
   const { targetWidth, targetHeight, ratio, ratioLabel } = formatAiImageGenerationTarget(holderShape)
   const referenceLines = aiImageReferenceLines({ references, referenceAttached })
+  if (ardot) return [...ardotCreationInstructions('ui', holderShape.id), ...ardot, ...referenceLines, 'Prompt:', userPrompt.trim()].join('\n')
 
   return [
     AI_DRAFT_GENERATION_PROMPT_PREFIX,
@@ -2659,8 +2703,9 @@ function buildAiDraftGenerationPrompt({ holderShape, userPrompt, references, ref
   ].join('\n')
 }
 
-function buildAiSlidesGenerationPrompt({ slidesShape, pageCount, userPrompt, references, referenceAttached }) {
+function buildAiSlidesGenerationPrompt({ slidesShape, pageCount, userPrompt, references, referenceAttached, ardot = false }) {
   const referenceLines = aiImageReferenceLines({ references, referenceAttached })
+  if (ardot) return [...ardotCreationInstructions('slides', slidesShape.id, pageCount), ...ardot, ...referenceLines, 'Prompt:', userPrompt.trim()].join('\n')
 
   return [
     AI_SLIDES_GENERATION_PROMPT_PREFIX,
@@ -2723,7 +2768,7 @@ async function sendAiImageGenerationRequest({ holderShape, userPrompt, reference
   for (const [index, referenceFile] of imageReferences.entries()) {
     const referenceDataUrl = await readFileAsDataUrl(referenceFile)
     let savedReference = null
-    if (hasCowartWidgetBridge()) {
+    if (hasCowartWidgetBridge() || !IS_COWART_WIDGET_BUILD) {
       try {
         savedReference = await saveCowartReferenceImage({
           holderShapeId: holderShape.id,
@@ -2788,7 +2833,7 @@ async function sendAiDraftGenerationRequest({ holderShape, userPrompt, reference
   for (const [index, referenceFile] of imageReferences.entries()) {
     const referenceDataUrl = await readFileAsDataUrl(referenceFile)
     let savedReference = null
-    if (hasCowartWidgetBridge()) {
+    if (hasCowartWidgetBridge() || !IS_COWART_WIDGET_BUILD) {
       try {
         savedReference = await saveCowartReferenceImage({
           holderShapeId: holderShape.id,
@@ -2809,6 +2854,7 @@ async function sendAiDraftGenerationRequest({ holderShape, userPrompt, reference
   }
 
   const prompt = buildAiDraftGenerationPrompt({
+    ardot: await selectedArdotProvider(),
     holderShape,
     userPrompt,
     references,
@@ -2851,7 +2897,7 @@ async function sendAiSlidesGenerationRequest({ slidesShape, pageCount, userPromp
   for (const [index, referenceFile] of imageReferences.entries()) {
     const referenceDataUrl = await readFileAsDataUrl(referenceFile)
     let savedReference = null
-    if (hasCowartWidgetBridge()) {
+    if (hasCowartWidgetBridge() || !IS_COWART_WIDGET_BUILD) {
       try {
         savedReference = await saveCowartReferenceImage({
           holderShapeId: slidesShape.id,
@@ -2872,6 +2918,7 @@ async function sendAiSlidesGenerationRequest({ slidesShape, pageCount, userPromp
   }
 
   const prompt = buildAiSlidesGenerationPrompt({
+    ardot: await selectedArdotProvider(),
     slidesShape,
     pageCount,
     userPrompt,
@@ -3215,6 +3262,7 @@ function CowartHtmlDraftEmbed({ shape }) {
     <HTMLContainer className="cowart-html-draft-container" id={shape.id}>
       {htmlSource ? (
         <iframe
+          key={isEditing ? 'safe-edit' : 'isolated-preview'}
           ref={handleIframeRef}
           className="cowart-html-draft-frame"
           data-cowart-html-draft-shape-id={shape.id}
@@ -3223,7 +3271,7 @@ function CowartHtmlDraftEmbed({ shape }) {
           height={toDomPrecision(shape.props.h)}
           onLoad={() => setFrameLoadVersion((version) => version + 1)}
           referrerPolicy="no-referrer"
-          sandbox="allow-forms allow-popups allow-same-origin allow-scripts"
+          sandbox={isEditing ? 'allow-same-origin' : 'allow-scripts'}
           srcDoc={htmlSource}
           tabIndex={isEditing ? 0 : -1}
           title={AI_DRAFT_HOLDER_LABEL}
@@ -3647,7 +3695,7 @@ function CowartSlidesMedia({ onUnhandledHtmlClick, shape, title }) {
         className="cowart-slides-media"
         frameBorder="0"
         onLoad={handleHtmlFrameLoad}
-        sandbox="allow-forms allow-popups allow-same-origin allow-scripts"
+        sandbox="allow-scripts"
         src={source.kind === 'html-url' ? source.url : undefined}
         srcDoc={source.kind === 'html' ? source.htmlContent : undefined}
         tabIndex={-1}
@@ -5474,6 +5522,8 @@ function CowartImageToolbarContent() {
       {!isInCropTool && (
         <>
           <CowartAnnotationEditToolbarButton imageShapeId={imageShapeId} />
+          <CowartAnnotationEditToolbarButton imageShapeId={imageShapeId} mode="ardot-edit" />
+          <CowartAnnotationEditToolbarButton imageShapeId={imageShapeId} mode="image-to-poster" />
           <CowartAnnotationHtmlToolbarButton imageShapeId={imageShapeId} />
         </>
       )}
@@ -5562,9 +5612,11 @@ function CowartAltTextEditor({ shapeId, onClose }) {
   )
 }
 
-function CowartAnnotationEditToolbarButton({ imageShapeId }) {
+function CowartAnnotationEditToolbarButton({ imageShapeId, mode = 'bitmap-edit' }) {
   const editor = useEditor()
   const [status, setStatus] = useState('idle')
+  const [errorMessage, setErrorMessage] = useState('')
+  const label = mode === 'image-to-poster' ? '用此图制作 Ardot 海报' : mode === 'ardot-edit' ? 'Ardot 源文件编辑' : ANNOTATION_EDIT_TOOL_LABEL
 
   useEffect(() => {
     if (status === 'idle' || status === 'sending') return
@@ -5577,10 +5629,23 @@ function CowartAnnotationEditToolbarButton({ imageShapeId }) {
 
     setStatus('sending')
     try {
-      await sendAnnotationEditRequest(editor, imageShapeId)
+      const brief = mode === 'image-to-poster' ? await requestCanvasInput('将此图片传入 Ardot 制作海报。请输入标题、文案、尺寸或风格要求：') : ''
+      if (mode === 'image-to-poster' && !brief?.trim()) { setStatus('idle'); return }
+      if (mode === 'ardot-edit' && !ardotSource(editor.getShape(imageShapeId)?.meta)) {
+        const fileUrl = await requestCanvasInput('此图片没有 Ardot 来源。请输入它对应的真实 Ardot 文件链接（取消不会执行编辑）：')
+        if (!fileUrl) { setStatus('idle'); return }
+        const nodeId = await requestCanvasInput('请输入该图片对应的 Ardot 画框节点 ID（不是 Cowart shape ID）：')
+        if (!nodeId) { setStatus('idle'); return }
+        const source = ardotSource({ cowartArdotSource: { fileUrl, nodeId } })
+        if (!source) throw new Error('Ardot 文件链接或节点 ID 无效。')
+        const shape = editor.getShape(imageShapeId)
+        editor.updateShape({ id: shape.id, type: shape.type, meta: { ...shape.meta, cowartArdotSource: source } })
+      }
+      await sendAnnotationEditRequest(editor, imageShapeId, mode, brief)
       setStatus('sent')
     } catch (error) {
       console.error(error)
+      setErrorMessage(error.message)
       setStatus('error')
     }
   }
@@ -5591,15 +5656,15 @@ function CowartAnnotationEditToolbarButton({ imageShapeId }) {
       : status === 'sent'
         ? '已提交标注修改'
         : status === 'error'
-          ? '提交失败，请重试'
-          : ANNOTATION_EDIT_TOOL_LABEL
+          ? errorMessage
+          : label
 
   return (
     <TldrawUiToolbarButton
       aria-label={title}
       className="cowart-annotation-edit-toolbar-button"
       data-status={status}
-      data-testid="tool.cowart-annotation-edit"
+      data-testid={mode === 'image-to-poster' ? 'tool.cowart-image-to-poster' : mode === 'ardot-edit' ? 'tool.cowart-ardot-edit' : 'tool.cowart-annotation-edit'}
       disabled={status === 'sending'}
       onClick={handleClick}
       title={title}
@@ -5609,7 +5674,7 @@ function CowartAnnotationEditToolbarButton({ imageShapeId }) {
         icon={status === 'sent' ? 'check' : status === 'error' ? 'warning-triangle' : 'tool-highlight'}
         small
       />
-      <span className="cowart-annotation-edit-toolbar-label">{ANNOTATION_EDIT_TOOL_LABEL}</span>
+      <span className="cowart-annotation-edit-toolbar-label">{status === 'error' ? errorMessage : label}</span>
     </TldrawUiToolbarButton>
   )
 }
@@ -6112,14 +6177,8 @@ export default function App() {
 
     let canvasEvents = null
     let canvasRefreshTimer = null
-    if (hasCowartWidgetBridge()) {
+    if (hasCowartWidgetBridge() || !IS_COWART_WIDGET_BUILD) {
       canvasRefreshTimer = window.setInterval(loadRemoteCanvasSnapshot, 1600)
-    } else if (!IS_COWART_WIDGET_BUILD && 'EventSource' in window) {
-      canvasEvents = new window.EventSource('/api/canvas-events')
-      canvasEvents.addEventListener('canvas-changed', loadRemoteCanvasSnapshot)
-      canvasEvents.onerror = (error) => {
-        console.warn('Cowart canvas live refresh disconnected.', error)
-      }
     }
 
     const unsubscribeAnnotationEditingToolLock = editor.store.listen(
@@ -6229,6 +6288,7 @@ export default function App() {
 
   return (
     <main className="cowart-canvas" aria-label="Cowart infinite canvas">
+      {!IS_COWART_WIDGET_BUILD && <LocalTaskPanel />}
       <SkippedRecordsNotice records={skippedRecords} />
       <Tldraw
         snapshot={snapshot ?? undefined}

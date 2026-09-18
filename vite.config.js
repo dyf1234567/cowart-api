@@ -1,5 +1,8 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { authorizeLocalApi } from './mcp/lib/local-api-security.mjs'
+import { createLocalTaskRunner } from './mcp/lib/local-task-runner.mjs'
+import { fileURLToPath } from 'node:url'
 import { randomUUID } from 'node:crypto'
 import { createReadStream, readFileSync } from 'node:fs'
 import { copyFile, mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises'
@@ -13,7 +16,9 @@ import {
   readCowartProviderConfig,
   saveCowartProfile,
   writeCowartModelPreferences,
-  writeCowartProviderConfig
+  writeCowartProviderConfig,
+  saveCowartCanvasSnapshot as saveProtectedCanvasSnapshot,
+  writeCowartPageAsset
 } from './mcp/lib/canvas-storage.mjs'
 
 const projectDir = resolve(process.env.COWART_PROJECT_DIR ?? process.cwd())
@@ -82,13 +87,13 @@ function broadcastCanvasChanged(result) {
   }
 }
 
-function readRequestBody(req) {
+function readRequestBody(req, limit = 50 * 1024 * 1024) {
   return new Promise((resolveBody, rejectBody) => {
     let body = ''
     req.setEncoding('utf8')
     req.on('data', (chunk) => {
       body += chunk
-      if (body.length > 50 * 1024 * 1024) {
+      if (body.length > limit) {
         rejectBody(new Error('Canvas payload is too large.'))
         req.destroy()
       }
@@ -522,33 +527,9 @@ async function writeJsonAtomic(filePath, payload) {
 }
 
 async function saveCanvasSnapshot(snapshot) {
-  const pages = getPageRecords(snapshot)
-  if (pages.length === 0) {
-    await writeJsonAtomic(canvasFile, snapshot)
-    return { storage: 'legacy-single-file', paths: [canvasFile] }
-  }
-
-  const paths = []
-  for (const page of pages) {
-    const filePath = pageFilePath(page.id)
-    const pageSnapshot = await localizePageAssets(snapshotForPage(snapshot, page), page.id)
-    await writeJsonAtomic(filePath, pageSnapshot)
-    paths.push(filePath)
-  }
-
-  const manifest = {
-    version: 1,
-    source: 'cowart',
-    pages: pages.map((page) => ({
-      id: page.id,
-      name: page.name,
-      index: page.index,
-      path: relative(canvasDir, pageFilePath(page.id))
-    }))
-  }
-  await writeJsonAtomic(pagesManifestFile, manifest)
-
-  return { storage: 'per-page', paths }
+  const result = await saveProtectedCanvasSnapshot({ projectDir, canvasDir, protectImageRecords: true }, snapshot)
+  if (!result.ok) throw new Error(result.message || 'Canvas save rejected')
+  return result
 }
 
 async function serveCanvasAsset(req, res, next) {
@@ -576,6 +557,9 @@ async function serveCanvasAsset(req, res, next) {
     res.setHeader('content-type', mimeTypes.get(extname(filePath).toLowerCase()) ?? 'application/octet-stream')
     res.setHeader('content-length', String(fileStat.size))
     res.setHeader('cache-control', 'no-cache')
+    if (['.html', '.htm', '.svg'].includes(extname(filePath).toLowerCase())) {
+      res.setHeader('content-security-policy', "sandbox allow-scripts")
+    }
     createReadStream(filePath).pipe(res)
   } catch (error) {
     if (error.code === 'ENOENT') {
@@ -588,28 +572,57 @@ async function serveCanvasAsset(req, res, next) {
 }
 
 function canvasStoragePlugin() {
+  const sessionToken = randomUUID()
+  let tasks
   return {
     name: 'cowart-canvas-storage',
+    async closeBundle() { await tasks?.close().catch(() => {}) },
+    transformIndexHtml() {
+      return [{ tag: 'meta', attrs: { name: 'cowart-session', content: sessionToken }, injectTo: 'head' }]
+    },
     configureServer(server) {
-      // Codex widget 的宿主代理可能拒绝写调用，此时 widget 会回退到本服务的 HTTP 接口；
-      // widget iframe 与本地服务不同源，需要放行 CORS。放在最前面，抢在其它中间件之前处理预检。
+      tasks = createLocalTaskRunner({ projectDir, canvasDir, pluginRoot: dirname(fileURLToPath(import.meta.url)) })
       server.middlewares.use((req, res, next) => {
         if (!req.url?.startsWith('/api/')) {
           next()
           return
         }
-        res.setHeader('access-control-allow-origin', '*')
-        res.setHeader('access-control-allow-methods', 'GET, PUT, POST, DELETE, OPTIONS')
-        res.setHeader('access-control-allow-headers', 'content-type')
-        if (req.method === 'OPTIONS') {
-          res.statusCode = 204
-          res.end()
+        res.setHeader('cache-control', 'no-store')
+        if (!authorizeLocalApi(req, sessionToken)) {
+          sendJson(res, 403, { error: 'Cowart local API requires a same-origin session. Reload the canvas page.' })
           return
         }
         next()
       })
 
       server.middlewares.use(serveCanvasAsset)
+
+      server.middlewares.use('/api/tasks', async (req, res) => {
+        try {
+          const path = new URL(req.url, 'http://127.0.0.1').pathname
+          if (path !== '/') { sendJson(res, 404, { error: 'Unknown task endpoint' }); return }
+          if (req.method === 'GET') { sendJson(res, 200, { jobs: await tasks.list() }); return }
+          if (req.method !== 'POST' && req.method !== 'DELETE') { sendJson(res, 405, { error: 'GET, POST or DELETE required' }); return }
+          const body = JSON.parse(await readRequestBody(req, 64 * 1024))
+          const job = req.method === 'POST' ? await tasks.submit(body) : await tasks.cancel(body.id)
+          sendJson(res, req.method === 'POST' ? 202 : 200, { job })
+        } catch (error) { sendJson(res, error.status || 400, { error: error.message }) }
+      })
+
+      server.middlewares.use('/api/reference-image', async (req, res) => {
+        try {
+          if (req.method !== 'POST') { sendJson(res, 405, { error: 'POST required' }); return }
+          const body = JSON.parse(await readRequestBody(req))
+          const { snapshot } = await loadCanvasSnapshot()
+          const shape = snapshot?.store?.[body.holderShapeId || body.anchorShapeId]
+          const pageId = shape && pageIdForShape(snapshot.store, shape)
+          if (!pageId) { sendJson(res, 400, { error: 'Save the target canvas shape before attaching references.' }); return }
+          const result = await writeCowartPageAsset({ projectDir, canvasDir }, {
+            pageId, fileName: body.fileName, dataUrl: body.dataUrl, mimeType: body.mimeType
+          })
+          sendJson(res, 200, { ...result, projectDir })
+        } catch (error) { sendJson(res, 400, { error: error.message }) }
+      })
 
       server.middlewares.use('/api/html-draft', async (req, res) => {
         try {
@@ -848,13 +861,14 @@ function canvasStoragePlugin() {
         try {
           if (req.method === 'GET') {
             const result = await loadCanvasSnapshot()
-            sendJson(res, 200, result)
+            sendJson(res, 200, { ...result, projectDir, canvasDir })
             return
           }
 
           if (req.method === 'PUT') {
             const body = await readRequestBody(req)
-            const snapshot = JSON.parse(body)
+            const input = JSON.parse(body)
+            const snapshot = input.snapshot ?? input
             if (!isCanvasSnapshot(snapshot)) {
               sendJson(res, 400, { error: 'Expected a tldraw store snapshot.' })
               return
@@ -869,7 +883,11 @@ function canvasStoragePlugin() {
               return
             }
 
-            const result = await saveCanvasSnapshot(sanitized.snapshot)
+            const result = await saveProtectedCanvasSnapshot({
+              projectDir, canvasDir, protectImageRecords: true,
+              acknowledgedImageShapeDeletes: Array.isArray(input.acknowledgedImageShapeDeletes) ? input.acknowledgedImageShapeDeletes : []
+            }, sanitized.snapshot)
+            if (!result.ok) { sendJson(res, 200, result); return }
             sendJson(res, 200, { ok: true, ...result, skippedRecords: sanitized.skippedRecords })
             broadcastCanvasChanged(result)
             return
@@ -906,7 +924,8 @@ export default defineConfig({
   server: {
     host: '127.0.0.1',
     port: 43217,
-    // 关闭内置 CORS，由上方自定义中间件统一处理 /api/ 的跨源头，避免预检响应被内置逻辑吞掉。
+    strictPort: true,
+    // No cross-origin HTTP access. Native widgets use the project-scoped MCP bridge.
     cors: false
   }
 })

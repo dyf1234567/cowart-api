@@ -19,4 +19,4 @@ fi
 echo "Cowart canvas: http://127.0.0.1:${PORT}"
 echo "Cowart canvas data: ${CANVAS_DIR}/pages/<page-id>/cowart-canvas.json"
 echo "Cowart page assets: ${CANVAS_DIR}/pages/<page-id>/assets -> http://127.0.0.1:${PORT}/page-assets/<page-id>/"
-exec npm run dev -- --host 127.0.0.1 --port "$PORT"
+exec npm run dev -- --host 127.0.0.1 --port "$PORT" --strictPort

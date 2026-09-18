@@ -356,7 +356,7 @@ slide.style.transformOrigin = 'top left';
 The following steps throughout the workflow should be parallelized whenever possible for significant efficiency gains:
 - All pages' `batch_read` calls in parallel
 - All pages' `capture_screenshot` calls in parallel
-- Text node and frame node `fullData` reads in parallel
+- Read text and frame nodes using live `batch_read` properties/readDepth fields in parallel where independent.
 - Image and SVG exports in parallel batches
 
 ### Image Export Strategy
@@ -458,7 +458,7 @@ Double-line borders in design files are often implemented with two RECTANGLE nod
 | Issue | Cause | Solution |
 |-------|-------|----------|
 | Image export fails | Batch too large or directory missing | Run `mkdir -p` first; reduce to 5 per batch |
-| Text styles don't match | fullData not read | Re-read text nodes with `fullData: true` |
+| Text styles don't match | Required text properties not read | Re-read the required properties using the live batch_read schema |
 | Gradient direction wrong | gradientTransform misinterpreted | Cross-reference with the mapping table |
 | Opacity stacking anomaly | Node opacity and fill opacity confused | Handle the two opacity types separately |
 | Layout misaligned | Flex property mapping error | Verify primaryAxis/counterAxis mapping |

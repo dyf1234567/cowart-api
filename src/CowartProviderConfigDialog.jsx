@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { deleteCowartProfile, hasCowartWidgetBridge, saveCowartProfile } from './cowartClient.js'
+import { deleteCowartProfile, hasCowartWidgetBridge, saveCowartProfile, loadCowartProfiles } from './cowartClient.js'
 
 export const PROFILE_TYPE_OPTIONS = [
   { id: 'custom', label: '自定义 API（OpenAI 兼容）' },
@@ -18,6 +18,7 @@ function defaultSettings(provider) {
     return {
       serverUrl: 'https://ardot.tencent.com/mcp',
       exportFormat: 'png',
+      imageProfileId: '',
       configured: true,
       authentication: 'oauth'
     }
@@ -65,6 +66,15 @@ export function CowartProviderConfigDialog({ profile, defaultProvider = 'custom'
   const [isDeleting, setIsDeleting] = useState(false)
   const [message, setMessage] = useState('')
   const [toast, setToast] = useState('')
+  const [imageProfiles, setImageProfiles] = useState([])
+  useEffect(() => {
+    if (provider !== 'ardot') return
+    let active = true
+    loadCowartProfiles().then((items) => {
+      if (active) setImageProfiles(items.filter((item) => ['dashscope', 'custom', 'comfyui'].includes(item.provider)))
+    }).catch((error) => { if (active) setMessage(`无法读取素材生图配置：${error.message}`) })
+    return () => { active = false }
+  }, [provider])
   // Codex widget 内保存走宿主代理，可能因宿主限制失败；此时给出替代保存方式。
   const [saveFallback, setSaveFallback] = useState(null)
 
@@ -138,6 +148,7 @@ export function CowartProviderConfigDialog({ profile, defaultProvider = 'custom'
       }
     } else if (provider === 'ardot') {
       payload = {
+        imageProfileId: settings.imageProfileId || '',
         serverUrl: 'https://ardot.tencent.com/mcp',
         exportFormat: ['png', 'jpeg', 'webp'].includes(settings.exportFormat)
           ? settings.exportFormat
@@ -480,11 +491,25 @@ export function CowartProviderConfigDialog({ profile, defaultProvider = 'custom'
             <div className="cowart-config-field">
               <span>认证方式</span>
               <p className="cowart-config-message">
-                使用 Ardot 官方 OAuth（mcp:use）。首次启用后请在 Codex 的 MCP 连接界面完成腾讯账号授权；Cowart 不保存账号密码或访问令牌。
+                使用 Ardot 官方 OAuth（mcp:use）。保存配置不代表已经连接；首次使用需在 Codex 完成授权，以实际工具调用验证。Cowart 不保存 OAuth 令牌。
               </p>
             </div>
           </>
         )}
+
+        {provider === 'ardot' && <label className="cowart-config-field">
+          <span>Ardot 素材生图服务（与设计排版分开）</span>
+          <select value={settings.imageProfileId || ''} disabled={isSaving || isDeleting}
+            onChange={(event) => updateSettings('imageProfileId', event.target.value)}
+            onPointerDown={stopInputEvent} onKeyDown={stopInputEvent}>
+            <option value="">仅用现有素材；需要生图时询问</option>
+            <option value="openai">Codex 图片生成</option>
+            {settings.imageProfileId && settings.imageProfileId !== 'openai' && !imageProfiles.some((item) => item.id === settings.imageProfileId) && (
+              <option value={settings.imageProfileId}>原素材配置不可用，请重新选择</option>
+            )}
+            {imageProfiles.map((item) => <option key={item.id} value={item.id}>{item.name}（{item.provider}）</option>)}
+          </select>
+        </label>}
 
         {saveFallback && (
           <div className="cowart-config-field">
@@ -492,7 +517,7 @@ export function CowartProviderConfigDialog({ profile, defaultProvider = 'custom'
             <p className="cowart-config-message">
               原因：{saveFallback.reason}
               。可复制下方画像 JSON 发给 Codex 助手，请它调用保存画像工具代为保存；或在本地画布页面的画像管理中添加。
-              若本地开发服务（npm run dev）正在运行，widget 会自动改走本地 HTTP 接口，启动后重试即可。
+              为保护项目数据，widget 不会自动改走其他端口的 HTTP 服务。
             </p>
             <textarea
               className="cowart-config-textarea"

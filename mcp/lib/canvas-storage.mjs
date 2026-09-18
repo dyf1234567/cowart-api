@@ -1032,6 +1032,7 @@ function profileSettingsDefaults(provider) {
     return {
       serverUrl: "https://ardot.tencent.com/mcp",
       exportFormat: "png",
+      imageProfileId: "",
     };
   }
   if (provider === "comfyui") {
@@ -1102,6 +1103,8 @@ function publicProfileSettings(profile) {
       configured: true,
       serverUrl: settings.serverUrl,
       exportFormat: settings.exportFormat,
+      imageProfileId: settings.imageProfileId,
+      connectionStatus: "unverified",
       authentication: "oauth",
     };
   }

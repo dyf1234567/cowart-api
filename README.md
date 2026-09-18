@@ -8,7 +8,7 @@ English README: [README.en.md](README.en.md)
 
 ## 功能
 
-- 在 Codex 中打开一个原生 tldraw 无限画布 widget；正常使用不再通过网页浏览器或 in-app browser 打开本地页面。
+- 默认打开或复用一个当前项目的 Cowart 网页画布；只有明确要求原生 widget 时才打开 widget，不默认双开。
 - 在当前项目目录中持久化画布页面和图片资源。
 - 在画布中创建 AI 图片框，直接输入 prompt、选择参考图，并让 Codex 按选中框的位置和比例生成图片后替换它。
 - 创建 16:9 的 `AI HTML` 框，通过 prompt 和参考图生成可运行的单文件 HTML，并直接嵌入画布继续编辑或迭代。
@@ -73,7 +73,22 @@ codex plugin marketplace upgrade cowart-api-github
 Open the Cowart canvas for this project.
 ```
 
-Cowart 会通过 `render_cowart_canvas_widget` 打开 Codex 原生 widget，不需要再启动本地网页服务或手动打开 in-app browser。`scripts/start-canvas.sh` 只保留为本地开发 fallback。
+Cowart 默认验证当前项目的本地服务并复用一个网页画布标签，不同时打开原生 widget。明确要求原生 widget 时才调用 `render_cowart_canvas_widget`，且不再额外打开网页。已有旧标签不会被擅自关闭。
+
+`scripts/probe-local-canvas.mjs --project <项目绝对路径>` 会验证会话及项目/画布目录，不再用未授权的 `/api/profiles` 请求判断服务是否存在。端口被其他项目占用时明确报错，不自动递增端口或复用错误项目。
+
+### 独立网页自动执行
+
+本地 Vite 画布也支持自动任务，不必复制提示词到 Codex 对话。点击生成或编辑后，确认本次执行及可能的服务费用，后台会通过本机已登录的 Codex CLI 执行，结果自动同步回画布。右上角“自动任务”可查看状态、结果和取消任务。
+
+- 前提：安装并登录 Codex CLI，启用 Cowart 插件；使用 Ardot 时须先完成 Ardot MCP OAuth 授权。网页和 CLI 使用同一用户的配置。可用服务取决于 CLI 实际加载的工具，不保证桌面独有工具可用。
+- 执行使用 `codex exec --json --ephemeral --approve-for-me`，保留 workspace-write 沙箱和自动审批审查；不使用无沙箱或绕过审批选项。
+- 项目路径由服务端固定，不接受网页覆盖。任务接口需同源会话校验；一个画布一次只执行一个任务，同一请求 ID 不重复执行。
+- 每次提交需确认。失败、超时和服务重启均不自动重试；取消只停止本地进程，已发出的远端请求可能继续计费。先检查远端结果再重新提交。
+- 最近 50 条任务状态保存在 `canvas/.cowart-tasks.json`，不保存提示词或原始工具日志。返回说明仍可能包含项目内容，请按项目数据保管。服务重启后未完成任务标记为中断。
+- HTML 动态预览使用隔离源；DOM 编辑和 PNG 截图禁用脚本，截图捕获静态 HTML，不包含脚本运行后才生成的内容。
+
+此执行通道属于本地 Vite 服务，静态托管的 `dist/` 和 `vite preview` 不提供任务接口。它不会向当前 Codex 对话自动追加消息；进度显示在画布任务面板。无桥接的内嵌 widget 仍会明确报错，不跨端口转交任务。
 
 画布数据会保存在当前项目目录下：
 
@@ -149,7 +164,7 @@ node scripts/generate-comfyui-image.mjs --prompt "..." --width 1024 --height 102
 
 ## 技能
 
-- `cowart:cowart-open-canvas`：打开 Cowart 原生画布 widget。
+- `cowart:cowart-open-canvas`：打开或复用一个 Cowart 网页画布；明确要求时才打开原生 widget。
 - `cowart:cowart-image-gen`：接收画布内 prompt 和参考图，用生成图片替换选中的 `AI 图片` 框；没有选中框时也可以把生成图插入当前页面。
 - `cowart:cowart-image-edit`：根据画布提交或用户提供的 Cowart 标注截图生成修订图。
 - `cowart:cowart-ardot-poster`：在腾讯设计 Ardot 中生成可编辑海报、导出并插入 Cowart。

@@ -1,93 +1,40 @@
 ---
 name: cowart-open-canvas
-description: Open the native Cowart Codex widget together with the local Cowart web canvas. Use when the user asks to open, launch, view, or work in the Cowart canvas or wants an infinite canvas inside Codex.
+description: Open or reuse one project-scoped Cowart web canvas. Use when the user asks to open, launch, view, or work in Cowart. Open the native widget instead only when explicitly requested.
 ---
 
-# Cowart Open Canvas
+# Open one Cowart canvas
 
-## Workflow
+## Choose one surface
 
-1. Use the Cowart MCP `render_cowart_canvas_widget` tool to open the canvas as a native Codex widget. Pass the user's active Codex workspace as `projectDir`; do not pass the Cowart plugin repository directory.
+Default to the local web canvas, which supports automatic task execution. Do not also call `render_cowart_canvas_widget`. If the user explicitly requests the native widget, call that tool with the active user workspace as `projectDir` and do not start or open the web canvas. Open both only when the user asks for both.
 
-```json
-{
-  "projectDir": "/absolute/path/to/user/codex-project"
-}
-```
+## Reuse the correct project service
 
-The tool returns `openai/outputTemplate: ui://widget/cowart/canvas.html`, which tells Codex to render the widget directly.
-
-2. The widget routes its write tool calls through the Codex host proxy, and some Codex versions reject those calls with `-32000 MCP proxy request failed`. The local web service does not have this problem because its `/api` endpoints are same-origin with the page. Always start the local service and open it alongside the widget.
-
-First probe whether the service is already running:
+Resolve the active user workspace, not the plugin repository. The plugin root is two levels above this file. From that root, run:
 
 ```text
-GET http://127.0.0.1:43217/api/profiles
+node scripts/probe-local-canvas.mjs --project <absolute-user-project> --url http://127.0.0.1:43217/
 ```
 
-If it responds, reuse it. Otherwise start it in the background from the Cowart plugin root (the directory that contains `package.json`, two levels above this SKILL.md), keeping the process running, with the user's active Codex workspace as the project directory:
+The helper obtains the same-origin capability from the HTML without printing it, then reads `/api/canvas` and verifies both `projectDir` and `canvasDir`.
 
-```bash
-# bash / macOS / Linux
-COWART_PROJECT_DIR=/absolute/path/to/user/codex-project npm run dev
-```
+- `ready`: reuse the returned URL. Do not start another server.
+- `offline` (exit 3): start the local service for that project on this exact port.
+- `mismatch`, `incompatible`, or other errors: do not reuse that server, stop it, or silently increment the port. Explain the conflict and ask which project/port to use. A 403 is not proof that the service is absent.
 
-```powershell
-# Windows PowerShell
-$env:COWART_PROJECT_DIR = "C:\absolute\path\to\user\codex-project"; npm run dev
-```
+If the user already has a Cowart tab at a different local port, probe that exact URL first. Do not scan unrelated ports.
 
-Run `npm install` first if `node_modules` is missing. The default URL is `http://127.0.0.1:43217/`; if the service output prints a different `Local:` URL (the port increments when 43217 is taken), use that actual URL instead.
+## Start only when offline
 
-3. Open the resulting local URL in the Codex in-app browser when the Browser tool chain is available. Use the Browser plugin's `control-in-app-browser` skill as the source of truth for opening the in-app browser. The correct model-side flow is:
+Ensure plugin dependencies are available. Use the plugin's `node_modules/vite/bin/vite.js`, with the plugin root as the working directory, `--host 127.0.0.1 --port 43217 --strictPort`. Set `COWART_PROJECT_DIR` to the active user workspace and `COWART_CANVAS_DIR` to its `canvas` directory. Preserve an explicitly requested custom canvas directory by passing it to the probe's `--canvas` option too.
 
-   1. Use tool discovery for the Node REPL JavaScript execution tool if it is not already visible. The required callable tool is the `js` execution tool, commonly exposed as `mcp__node_repl__js`; `js_reset` and `js_add_node_module_dir` are not sufficient for browser control.
-   2. In a fresh Node REPL session, bootstrap the Browser runtime with the Browser plugin's packaged client. Resolve `browser-client.mjs` from the current environment's `CODEX_HOME` (default `~/.codex`) so the skill does not depend on a specific username or plugin version:
+On Windows use `Start-Process -WindowStyle Hidden` with the actual Node executable and fixed Vite argument list; do not open a console window. On other systems keep the process running in the background. Do not disable sandboxing or approvals. Probe again after startup; only report success when identity validation succeeds. Port contention must fail, not move to another port automatically.
 
-```js
-const os = await import("node:os");
-const path = await import("node:path");
-const fs = await import("node:fs/promises");
+## Open or focus one browser tab
 
-const homeDir = nodeRepl.homeDir ?? os.homedir();
-const codexHome = globalThis.process?.env?.CODEX_HOME ?? path.join(homeDir, ".codex");
-const browserRoot = path.join(codexHome, "plugins", "cache", "openai-bundled", "browser");
-const versions = (await fs.readdir(browserRoot)).sort();
-const browserClientPath = path.join(browserRoot, versions.at(-1), "scripts", "browser-client.mjs");
+Use the installed Browser skill for browser setup and navigation; do not embed a separate browser bootstrap here. Inspect its tab list for the verified exact URL. Reuse/focus that tab without reloading it. If none exists, open one new tab; do not navigate an unrelated selected tab away from the user's work. If browser control is unavailable, return the verified URL rather than opening another surface or spawning more servers.
 
-const { setupBrowserRuntime } = await import(browserClientPath);
-await setupBrowserRuntime({ globals: globalThis });
-globalThis.browser = await agent.browsers.get("iab");
-nodeRepl.write(await browser.documentation());
-```
+Do not close unrelated or pre-existing tabs automatically. Explain that old widgets from earlier conversations may remain visible; the new workflow does not open another widget.
 
-   3. Select or create a tab, make the browser visible because this skill is meant to open the canvas for the user, and navigate with `tab.goto(url)`:
-
-```js
-await (await browser.capabilities.get("visibility")).set(true);
-let selectedTab = null;
-try {
-  selectedTab = await browser.tabs.selected();
-} catch (error) {
-  if (!String(error?.message ?? error).includes("No active tab")) throw error;
-}
-globalThis.tab = selectedTab ?? await browser.tabs.new();
-if ((await tab.url()) !== url) {
-  await tab.goto(url);
-}
-```
-
-Do not call `tab.goto(url)` if the selected tab is already on the Cowart URL; that reloads the page and can disturb work in progress. If browser control is unavailable, or browser bootstrap fails before navigation with a tool-layer/session-metadata error such as `codex/sandbox-state-meta: missing field sandboxPolicy`, treat the service start as successful and give the user the local URL instead of retrying browser control.
-
-4. Confirm both surfaces are open for the user, and tell them they share the same canvas data:
-
-```text
-canvas/pages/<page-id>/cowart-canvas.json
-canvas/pages/<page-id>/assets/
-```
-
-Saving profiles, provider configs, and canvas snapshots always works in the local web page; use it whenever the widget reports a save failure. If the MCP tool is not visible in the current session, use tool discovery for Cowart widget/render capabilities. If the plugin was just installed or upgraded, tell the user a new Codex conversation may be required for the new MCP tool schema to load.
-
-## Constraints
-
-Keep the local web service running for the whole session; do not stop it after opening the page. Do not inspect canvas files, run builds, check storage layout, take screenshots, or perform other validation steps unless opening the canvas fails or the user explicitly asks for those checks.
+The canvas stores data under `canvas/pages/<page-id>/`. The web task panel shows execution progress; each task needs confirmation and uses the selected services. Native widget bridge errors should be reported, not silently converted into another window.

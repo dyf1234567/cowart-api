@@ -34,14 +34,7 @@ Phase 4: Verification (screenshot each section)
 
 ## Phase 0: Ensure Design File Is Open
 
-**Follow `ardot-design-core` SKILL.md → Step 0** for the full file-open rule — including the injected
-`<ardot_file_directive action="create|open">` main path, the **at-most-one** `create_design` / `open_design`
-idempotency hard rule, and the async-load wait gate (never re-issue to "confirm"). Do not re-derive create vs. open here.
-
-**Design-to-code deviation — deferred `fetch_file_info`:** on the `create_design` branch, defer
-`fetch_file_info` until just before the first MCP call in **Phase 2** (`apply_variables`). Phase 1 is entirely
-local/web tooling (`curl`, `WebFetch`, `playwright`), which covers the async file-load window — pair
-`fetch_file_info` with Phase 2's first MCP message. On the `open_design` branch, call it right after the file is ready.
+Read the sibling `ardot-design-core/SKILL.md`. Create or open only as requested, retain the actual fileUrl and verify editor state and write permission. Retry a transient read, never create a second file to confirm readiness. Use the current browser skill for website inspection; retained command examples below are conceptual, not authorization to install or run a separate browser runtime.
 
 ---
 

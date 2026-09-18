@@ -23,17 +23,9 @@ When designing a landing page for a SaaS product or startup, the following secti
 9. **Final CTA Section** — Headline, subheadline, primary CTA, trust reassurance line
 10. **Footer** — Brand column with logo and tagline, navigation columns, bottom bar with copyright
 
-### Section Selection (Mandatory Hard Stop)
+### Section Selection
 
-**Before starting any landing page task, you MUST ask the user which sections to include using the `AskUserQuestion` tool as a multi-select question.** This prevents over-long tasks and keeps the design focused on what the user actually needs.
-
-Rules:
-- The question MUST be multi-select, listing sections 3–9 above as options (Header, Hero, and Footer are always included by default and should NOT appear as selectable options — they are implicit).
-- Provide an explicit "Skip / use default" option in the choices.
-- If the user does not select anything, picks "Skip / use default", or otherwise declines to choose, fall back to the **default minimal structure**: Header + Hero Section + Footer.
-- Never silently include all 10 sections. A full 10-section page is only allowed when the user explicitly selects every option.
-- Respect the user's selection literally: include only Header, Hero, Footer, and the user-picked sections, in the order listed above.
-- This selection step runs **before** the Brief & Requirements Check below and is independent of it. Do not skip it even if the user wrote a detailed brief.
+Use the sections requested by the user. Ask a concise question only when a missing section decision materially changes the deliverable. For delegated design choices, choose a focused structure suited to the brief and state the assumption. Do not require another approval for an already clear brief or invent a host-specific question tool.
 
 This structure is a baseline. Within the user-selected sections, you may still adapt content, ordering nuances, and emphasis based on the specific product and conversion goals — but you may not add sections the user did not pick.
 

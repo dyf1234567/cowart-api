@@ -9,6 +9,10 @@ Use this skill to turn user-provided Cowart 批注 screenshots into revised AI-g
 
 ## Preconditions
 
+This is the `bitmap-edit` mode: revise raster pixels, not Ardot layers. An Ardot-origin image may be edited as a bitmap only when the user chooses this mode. Do not carry `cowartArdotSource` onto the generated bitmap: its pixels no longer represent that editable node. Record the original shape ID for provenance instead.
+
+If the image provider preference is `ardot`, ask the user to choose a bitmap provider (Codex, DashScope, custom API or ComfyUI), or explicitly choose Ardot source editing. Do not silently use the default generator. Configuration read failures or missing selected profiles must stop rather than change providers.
+
 The native Cowart widget should be open for the active project. Cowart state is read and written through Cowart MCP tools, not through a localhost browser service.
 
 The user is responsible for providing the relevant screenshot(s). Do not auto-capture the current canvas and do not scan the whole canvas to infer edit requests; a canvas may contain many images with different annotations.

@@ -1,4 +1,4 @@
 interface:
   display_name: "Cowart Open Canvas"
-  short_description: "Open the Cowart infinite-canvas widget"
-  default_prompt: "Use $cowart:cowart-open-canvas to open the Cowart infinite-canvas widget."
+  short_description: "Open or reuse one Cowart web canvas"
+  default_prompt: "Use $cowart-open-canvas to open or reuse one Cowart canvas for this project."

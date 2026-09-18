@@ -5,7 +5,7 @@
 This document provides end-to-end workflow examples. For design rules, property constraints, troubleshooting, and the full **Tiered Validation / Convergence Threshold** spec, see `design-rules.md`.
 
 > **Four reminders** before reading the examples:
-> 1. **File-open gate** — `create_design` / `open_design` must complete and the ready context update must arrive **before** any other MCP call. Never bundle them with reads in the same message.
+> 1. **File-open gate** — retain the actual fileUrl from create/open, then verify access and editor state with live tools. No host-injected ready event is assumed.
 > 2. **`fetch_file_info` timing differs per branch**:
 >    - `open_design` branch → call `fetch_file_info` right after the file is ready (before Step 1 reads).
 >    - `create_design` branch → **defer** `fetch_file_info` until **after Step 5** (`build_style_guide`). Steps 2 - 5 are pure local reasoning / file reads / non-file MCP work, so they naturally cover the file's async load window. Fold `fetch_file_info` into the Step 6 parallel batch.
@@ -20,14 +20,14 @@ This document provides end-to-end workflow examples. For design rules, property 
 
 ```
 Step 0 (message 1):
-  create_design / open_design  ← exactly ONE call (follow <ardot_file_directive> if present); WAIT for ready before next message.
+  create_design / open_design according to the user request; retain fileUrl and verify readiness by reading state.
   (Never bundle subsequent reads into this same message — the editor is not loaded yet.)
   # open_design branch: fetch_file_info can follow in the next message (before Step 1 reads).
   # create_design branch: DO NOT call fetch_file_info yet — defer it to Step 6 below.
 
-Step 1 — read existing state (skipped for fresh create_design):
-  # Fresh file: empty canvas, root "0:1", no variables yet → nothing to read.
-  # Opened existing file: call the following (parallel, single message):
+Step 1 — read actual state for both new and existing files:
+  # Never assume a page ID. Pass the returned fileUrl to all required calls.
+  # Call the following where available (parallel, single message):
   #   fetch_editor_state(includeSchema: false)
   #   fetch_variables
 
@@ -72,7 +72,7 @@ Notes:
 
 ### Example B: Modifying an Existing Design
 
-> Modify tasks are **non-generation** — Step 0 of `SKILL.md` is a no-op for this example. Go straight to the reads below.
+> For modifications, verify the explicitly targeted file and node before the reads below. Do not create an unrelated new file.
 
 ```
 Step 0: Ensure design file is open → skip if editor already has a file loaded

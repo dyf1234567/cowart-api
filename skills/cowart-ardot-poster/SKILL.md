@@ -1,6 +1,6 @@
 ---
 name: cowart-ardot-poster
-description: Create an editable marketing poster with Tencent Design Ardot Remote MCP, export the finished frame as a bitmap, and place it into the Cowart canvas. Use when the user asks for an Ardot poster in Cowart or when the selected Cowart provider profile is ardot.
+description: Create an editable marketing poster with Tencent Design Ardot Remote MCP, export the finished frame as a bitmap, and place it into the Cowart canvas. Use for Ardot poster creation, not bitmap annotation edits or unrelated UI and slide requests.
 ---
 
 # Cowart Ardot Poster
@@ -17,6 +17,13 @@ Create the poster in Tencent Design Ardot, keep the design editable there, expor
 If Ardot returns an authentication error, stop the Ardot workflow and ask the user to complete the official OAuth connection. Do not silently fall back to another image provider.
 
 ## Workflow
+
+### Images in both directions
+
+- `image-to-ardot-poster`: use the supplied clean source image as material, upload it through the live Ardot image-import tools, then build editable text and layout around it. Preserve the Cowart original and insert a new poster beside it. Do not treat it as an existing editable Ardot source or carry old node bindings to the new poster.
+- Ardot may use a separately selected bitmap API to create missing imagery. Read the selected Ardot profile's `settings.imageProfileId` from Cowart's public profile tool. Empty means use existing assets or ask for a provider when generation is necessary; `openai` means explicitly selected Codex generation; otherwise resolve the exact saved DashScope/custom/ComfyUI profile. Never resolve it to another Ardot profile or pick the first available API.
+- For an Ardot profile, run `node scripts/generate-ardot-material.mjs --ardot-profile <exact Ardot profile ID> --prompt <material brief> --out-dir <workspace output folder>`; optionally add `--reference <source image>`. This wrapper resolves the exact material profile and isolates inherited provider environment overrides before calling the matching DashScope/custom/ComfyUI script. It does not implement Codex host image generation; use the available image tool when `imageProfileId` is `openai`. Use the returned `outputPath`, inspect the image, then import it through live Ardot upload/register tools. Keep typography and layout editable in Ardot. API generation is a material step, not a fallback replacing Ardot.
+- A user clicking “用此图制作 Ardot 海报” authorizes transferring that selected image to Ardot. Do not upload other canvas images. Respect any explicit constraints on API use, uploads, budget or existing materials. Stop on selected-provider failure; do not expose keys in prompts or design files.
 
 For design guidance, read the bundled `../ardot-design-core/SKILL.md` and `../ardot-poster/SKILL.md`. This skill owns the Cowart selection, file creation, export and insertion workflow; reuse the same Ardot file/frame when loading those companions.
 
@@ -51,6 +58,7 @@ For design guidance, read the bundled `../ardot-design-core/SKILL.md` and `../ar
    - Visually inspect the exported bitmap and confirm its dimensions and content.
 
 6. Insert the exported bitmap into Cowart.
+   - Always set `shapeMeta.cowartArdotSource` to `{ "fileUrl": "<actual Ardot file URL>", "nodeId": "<actual exported frame ID>" }`. This binding enables the separate Ardot source-edit action. A screenshot, filename or provider preference is not a source binding.
    - For a selected AI image holder, call `insert_cowart_image` with its id as `anchorShapeId` and leave `replaceAiImageHolder` unset or `true`.
    - Without a holder, call `insert_cowart_image` as a standalone image and use the exported poster's natural aspect ratio.
    - Preserve the holder dimensions and rotation. Do not stretch or crop the export.
@@ -60,6 +68,9 @@ For design guidance, read the bundled `../ardot-design-core/SKILL.md` and `../ar
    - Confirm the Cowart image shape id, saved asset path, final dimensions, and replaced holder id when applicable.
 
 ## Failure handling
+
+- Editing an existing linked design: use `ardot-design-router` and the actual source binding instead of creating an unrelated poster. The Ardot edit action preserves the original node and edits a duplicate, then exports a new linked Cowart image beside the original.
+- The `bitmap-edit` action uses `cowart-image-edit`, never this workflow, even when the image was originally exported from Ardot.
 
 - OAuth or trust required: ask for authorization and stop; no provider fallback.
 - No writable Ardot file and no create/open tool: ask the user to open or create an Ardot file.

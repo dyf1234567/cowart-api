@@ -1406,3 +1406,18 @@ body {
   color: #1c5fb8;
   text-decoration: underline;
 }
+
+.cowart-annotation-edit-toolbar-label {
+  max-width: 190px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Standalone execution remains visible without blocking canvas interactions. */
+.cowart-local-tasks { position: fixed; right: 16px; top: 64px; z-index: 10000; font: 13px/1.5 system-ui; color: #202124; }
+.cowart-local-tasks button, .cowart-task-confirm button { padding: 8px 12px; border: 1px solid #cbd2d8; border-radius: 8px; background: white; color: #202124; cursor: pointer; }
+.cowart-local-tasks section { width: min(380px, 85vw); max-height: 65vh; overflow: auto; margin-top: 8px; padding: 16px; background: white; border: 1px solid #ddd; border-radius: 12px; box-shadow: 0 8px 32px #0002; }
+.cowart-local-tasks article { border-top: 1px solid #ddd; padding: 12px 0; }
+.cowart-local-tasks pre, .cowart-task-confirm pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 300px; overflow: auto; }
+.cowart-task-confirm { width: min(680px, 90vw); padding: 24px; border: 1px solid #ccc; border-radius: 12px; z-index: 100001; color: #202124; background: white; }
+.cowart-task-confirm::backdrop { background: #0005; }

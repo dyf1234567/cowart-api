@@ -85,6 +85,7 @@ export function sanitizeCanvasSnapshotForTldraw(snapshot) {
   try {
     migratedSnapshot = validationStore.migrateSnapshot(snapshot)
   } catch (error) {
+    validationStore.dispose()
     return {
       snapshot: null,
       skippedRecords: [
@@ -109,6 +110,7 @@ export function sanitizeCanvasSnapshotForTldraw(snapshot) {
     }
   }
 
+  validationStore.dispose()
   return {
     snapshot: {
       schema: migratedSnapshot.schema,
